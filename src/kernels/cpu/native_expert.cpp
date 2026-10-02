@@ -89,9 +89,11 @@ void native_gu_rows(const NativeFmt& f, const uint8_t* blob, const void* const* 
     // can depend on how many drafts a verify window held.  STRATA_IQ_MT_MIN=1 (opt-in, 0.1.30) uses the multi-token
     // kernels for every group: output independent of the drafting, at a measured -1..-3% decode on IQ3_S (AVX-512).
     static const int mt_min = [] { const char* e = std::getenv("STRATA_IQ_MT_MIN"); return e ? std::atoi(e) : 2; }();
-    if (nt >= mt_min && (iq512_supported(f.gu_type) || iq256_supported(f.gu_type))) {
-        // each kernel only for the formats it implements: IQ4_XS has an AVX-2 one and no AVX-512 one, and
-        // falling through an empty switch would leave ff unwritten instead of falling back to ggml-cpu.
+    // A format with only an AVX-2 kernel (IQ4_XS, #415) takes it on AVX-2 CPUs only: an AVX-512 CPU keeps ggml-cpu for
+    // it, as before (its rows would round differently).  Each kernel only for the formats it implements: falling
+    // through an empty switch would leave ff unwritten instead of falling back to ggml-cpu.
+    static const bool cpu512 = cpu_avx512_ok();
+    if (nt >= mt_min && (iq512_supported(f.gu_type) || (!cpu512 && iq256_supported(f.gu_type)))) {
         if (avx512 && iq512_supported(f.gu_type)) {
             iq512_gu_rows(f.gu_type, blob, f.gu_row, f.up_off, (int) f.n_embd, act, nt, ff, r0, r1);
             return;
