@@ -11,6 +11,7 @@
 #include "strata/kernels/cpu/native_expert.hpp"
 #include "strata/kernels/cpu/expert.hpp"
 #include "strata/kernels/cpu/iq_avx512.hpp"
+#include "strata/kernels/cpu/expert_layout.hpp"
 #include "ggml-cpu.h"
 #include "strata/kernels/iq_kernels.hpp"
 
@@ -92,7 +93,7 @@ int check_blob(const cpu::NativeFmt& f, const std::vector<uint8_t>& blob, int se
         cpu::native_gu_rows(f, blob.data(), a, NT, ffp, 0, (int) FF);
         const auto* tc = ggml_get_type_traits_cpu((ggml_type) f.gu_type);
         const int it = 50;
-        if (cpu::iq512_supported(f.gu_type)) {
+        if (cpu::iq512_supported(f.gu_type) && cpu::cpu_avx512_ok()) {   // its kernel only where the CPU runs it
             // the AVX-512 rows against ggml's own vec_dot, same Q8_K activations: float-order differences only
             std::vector<float> g512((size_t) NT * FF), gref((size_t) NT * FF);
             float* gp[NT];
