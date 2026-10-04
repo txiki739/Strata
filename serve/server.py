@@ -253,6 +253,7 @@ class StrataEngine:
             try:                                        # QUIT first, as close() does: the engine frees its memory
                 self.proc.stdin.write("QUIT\n")
                 self.proc.stdin.flush()
+                self.proc.stdin.close()                 # and EOF: see close()
                 self.proc.wait(timeout=20)
             except (OSError, ValueError, subprocess.TimeoutExpired):
                 self.proc.terminate()
@@ -405,6 +406,10 @@ class StrataEngine:
         try:
             self.proc.stdin.write("QUIT\n")
             self.proc.stdin.flush()
+            # EOF as well: the engine's stdin reader thread sits in a read holding stdin's stdio lock, and the
+            # engine's exit() flushes every stream, so after QUIT it waited for EOF (or this wait's kill) with its
+            # memory already freed - 10-20 s and a kill on every close and unload (Linux, measured 2026-10-03)
+            self.proc.stdin.close()
             self.proc.wait(timeout=10)
         except Exception:
             self.proc.kill()
