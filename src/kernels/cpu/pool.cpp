@@ -15,6 +15,10 @@
 #else
 #include <pthread.h>
 #include <sched.h>
+
+#include <fstream>
+#include <map>
+#include <string>
 #endif
 
 namespace strata::kernels::cpu {
@@ -43,11 +47,31 @@ std::vector<std::vector<int>> physical_cores() {
         }
     }
 #else
-    cpu_set_t set;   // each logical processor as a core of its own
+    // The same grouping as Windows', from sysfs: the logical processors this process may run on, grouped by their
+    // core's sibling list ("0,8" or "0-1"), in the order of each core's first processor.  Treating every logical
+    // processor as a core put two workers on each core and the spinning host thread beside a worker: on a Ryzen 7
+    // 5700X (8 cores, 16 threads, UD-Q4_K_XL on an RTX 3090) 15 workers decoded 51.3 tok/s, 7 on 7 cores 58.4.
+    // Without sysfs (a container hiding it) each processor stays a core of its own, as before.
+    cpu_set_t set;
     CPU_ZERO(&set);
     if (sched_getaffinity(0, sizeof set, &set) == 0) {
-        for (int i = 0; i < CPU_SETSIZE; ++i)
-            if (CPU_ISSET(i, &set)) cores.push_back({i});
+        std::map<std::string, size_t> core_at;
+        for (int i = 0; i < CPU_SETSIZE; ++i) {
+            if (!CPU_ISSET(i, &set)) continue;
+            std::string siblings;
+            std::ifstream f("/sys/devices/system/cpu/cpu" + std::to_string(i) + "/topology/thread_siblings_list");
+            if (!(f && std::getline(f, siblings)) || siblings.empty()) {
+                cores.push_back({i});
+                continue;
+            }
+            const auto it = core_at.find(siblings);
+            if (it == core_at.end()) {
+                core_at.emplace(siblings, cores.size());
+                cores.push_back({i});
+            } else {
+                cores[it->second].push_back(i);
+            }
+        }
     }
 #endif
     if (cores.empty())
