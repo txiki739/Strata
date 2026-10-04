@@ -1,3 +1,14 @@
+> **This branch (`custom-plus`)** is [eddoursul/Strata](https://github.com/eddoursul/Strata)'s `custom` branch (a fork of
+> [Niko1221/Strata](https://github.com/Niko1221/Strata) tuned for an RTX 3090 with a second card as an expert tier) plus:
+> the dual-GPU lockup fix of eddoursul/Strata#2 and a follow-up for the cache freeze it caused with 6+ pool workers;
+> `--mmap-experts` for native packs (eddoursul/Strata#5); one pool worker per physical core on Linux (#6); the engine
+> exiting after `QUIT` (#7); a Spanish draft vocabulary (#8); and from Niko1221/Strata the IQ4_XS AVX-2 multi-token
+> kernel, the AVX2 gather for the IQ3 grids (`STRATA_IQ256_GATHER=1`) and `--adapt-decay`.
+>
+> **Measurements** on a Ryzen 7 5700X + 128 GB DDR4 + RTX 3090 + RTX 5060 Ti with unsloth's UD-IQ4_XS and UD-Q4_K_XL,
+> one and two GPUs: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md) ([en español](docs/MEASUREMENTS.es.md)) · configs:
+> [examples/r7-5700x](examples/r7-5700x/). UD-IQ4_XS decodes at **83 tok/s** on the 3090 and **108 tok/s** with both cards.
+
 <h1 align="center">Strata</h1>
 
 <p align="center"><b>Run a 125-billion-parameter AI model on a normal gaming PC</b><br>
