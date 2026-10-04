@@ -548,6 +548,9 @@ if(STRATA_NATIVE_EXPERTS)
   endif()
   target_link_libraries(strata_kernels_cpu PUBLIC ggml-cpu ggml-base)
   target_compile_definitions(strata_kernels_cpu PUBLIC STRATA_NATIVE_EXPERTS=1)
+  # the AVX-2 Q8_K activation quantizer against ggml's, byte for byte (--bench: its time) - upstream PR #851
+  add_executable(q8k_quant_parity src/kernels/cpu/q8k_quant_parity.cpp)
+  target_link_libraries(q8k_quant_parity PRIVATE strata_kernels_cpu)
   if(STRATA_ENABLE_CUDA)
     # llama.cpp's MMQ kernels (ggml-cuda, MIT) for the prompt path's experts, from the same checkout as ggml: mmq.cuh's
     # instances for the expert types of ISTA-DASLab's and unsloth's files and the quantizer, with the few host
