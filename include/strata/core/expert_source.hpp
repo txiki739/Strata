@@ -304,10 +304,13 @@ public:
     FileExpertSource(const FileExpertSource&) = delete;
     FileExpertSource& operator=(const FileExpertSource&) = delete;
 
-    /// Maps `<pack_dir>/experts.bin` and checks its size against `n_layers * n_expert * BLOB`.
+    /// Maps `<pack_dir>/experts.bin` and checks its size against the loaded `expert_layout().total` - the
+    /// canonical `n_layers * n_expert * BLOB` for a Q2_0 pack, or the sum of a native pack's per-layer blobs.
     ///
     /// The size check is not a formality: a short file would fault at the END of a long sequence, and an
-    /// over-long one means the pack is not the one the geometry came from.  Refuses with the two numbers.
+    /// over-long one means the pack is not the one the geometry came from.  Refuses with the two numbers.  The
+    /// blob offsets come from the same layout, so a native (IQ4 / mixed K-quant) pack reads its real per-layer
+    /// slices rather than a fixed `BLOB` stride.
     bool open(const std::string& pack_dir, int64_t n_layers, int64_t n_expert, std::string& err);
     void close();
 
@@ -323,7 +326,9 @@ public:
 private:
     const uint8_t* base_ = nullptr;
     int64_t blobs_ = 0;
+    int64_t n_layers_ = 0;
     int64_t n_expert_ = 0;
+    uint64_t bytes_ = 0;   ///< the mapped length (`expert_layout().total`), for munmap and the bounds check
     int64_t reads_ = 0;
 #if defined(_WIN32)
     void* file_ = nullptr;
