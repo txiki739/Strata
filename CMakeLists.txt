@@ -575,8 +575,6 @@ if(STRATA_NATIVE_EXPERTS)
     set_source_files_properties(src/kernels/cpu/iq_avx2.cpp PROPERTIES COMPILE_OPTIONS "-mavx2;-mfma;-mf16c")
   endif()
   target_link_libraries(strata_kernels_cpu PUBLIC ggml-cpu ggml-base)
-  # upstream PR #863's AVX-VNNI copies (Alder Lake / Sapphire Rapids and later) compiled out: these PCs are Zen 3
-  set_property(SOURCE src/kernels/cpu/iq_avx2.cpp src/kernels/cpu/q2_avx2.cpp APPEND PROPERTY COMPILE_DEFINITIONS STRATA_AVXVNNI=0)
   target_compile_definitions(strata_kernels_cpu PUBLIC STRATA_NATIVE_EXPERTS=1)
   # the AVX-2 Q8_K activation quantizer against ggml's, byte for byte (--bench: its time) - upstream PR #851
   add_executable(q8k_quant_parity src/kernels/cpu/q8k_quant_parity.cpp)
