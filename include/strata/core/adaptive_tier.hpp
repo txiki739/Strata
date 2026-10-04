@@ -44,6 +44,8 @@ public:
     /// An update waits while the previous one's moves are under way, instead of dropping the ones not staged yet (a
     /// tier whose moves all go out before the next window).
     void set_wait(bool on) { wait_ = on; }
+    /// The factor the routing counts keep after each update (--adapt-decay, upstream's c38dc71; 0.7 by default).
+    void set_decay(float f) { decay_ = f; }
 
     /// Ranks and queues this call's moves, then decays `usage` (n_layers x n_expert) unless `decay` is false (a tier
     /// ranked before another on the same counts).  The queued moves whose residents are still in place give way to
@@ -98,6 +100,7 @@ private:
     // The moves whose batch has landed, [0, landed_): retire() runs inside the pumps too (they retire batches to free
     // staging blocks and flight slots), so what it learns is kept here for apply_pending rather than returned and lost.
     size_t landed_ = 0;
+    float decay_ = 0.7f;
     uint64_t off_ = 0;
     cudaEvent_t t0_ = nullptr, t1_ = nullptr;   // around the last timed copies, whose `timed_` bytes have not landed
     uint64_t timed_ = 0;

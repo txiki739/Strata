@@ -314,7 +314,7 @@ bool AdaptiveTier::adapt(std::vector<float>& usage, std::string& err, bool decay
         pending_.emplace_back((int32_t) (m.layer * n_expert_ + m.in), m.slot);
     }
     if (decay)
-        for (float& v : usage) v *= 0.7f;
+        for (float& v : usage) v *= decay_;
     ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
     if (tier_trace())
         std::fprintf(stderr, "tier trace #%lld rank moves=%zu queued=%zu sent=%zu staged=%zu flying=%d resident=%lld "
