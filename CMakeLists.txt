@@ -551,6 +551,10 @@ if(STRATA_NATIVE_EXPERTS)
   # the AVX-2 Q8_K activation quantizer against ggml's, byte for byte (--bench: its time) - upstream PR #851
   add_executable(q8k_quant_parity src/kernels/cpu/q8k_quant_parity.cpp)
   target_link_libraries(q8k_quant_parity PRIVATE strata_kernels_cpu)
+  # the AVX-2 expert kernels' variants (iq_avx2.cpp) bit for bit against each other at 1..8 tokens and against
+  # ggml-cpu's dot, on random blocks; --bench: ms per expert on one thread - upstream PR #863
+  add_executable(iq_avx2_parity src/kernels/cpu/iq_avx2_parity.cpp)
+  target_link_libraries(iq_avx2_parity PRIVATE strata_kernels_cpu)
   if(STRATA_ENABLE_CUDA)
     # llama.cpp's MMQ kernels (ggml-cuda, MIT) for the prompt path's experts, from the same checkout as ggml: mmq.cuh's
     # instances for the expert types of ISTA-DASLab's and unsloth's files and the quantizer, with the few host

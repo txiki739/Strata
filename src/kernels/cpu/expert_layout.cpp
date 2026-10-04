@@ -102,6 +102,116 @@ bool cpu_avx512_ok() {
     return ok;
 }
 
+bool cpu_sse42_ok() {
+    static const bool ok = [] {
+        unsigned r[4] = {0, 0, 0, 0};
+#if defined(_MSC_VER)
+        int x[4];
+        __cpuidex(x, 1, 0);
+        for (int i = 0; i < 4; ++i) r[i] = (unsigned) x[i];
+#else
+        __cpuid_count(1, 0, r[0], r[1], r[2], r[3]);
+#endif
+        return ((r[2] >> 20) & 1u) && ((r[2] >> 23) & 1u);   // SSE4.2, POPCNT
+    }();
+    return ok;
+}
+
+const char* isa_floor_build() {
+#if defined(STRATA_ISA_FLOOR_AVX)
+    return "avx";
+#elif defined(STRATA_ISA_FLOOR_NONE)
+    return "sse4.2";
+#else
+    return "";
+#endif
+}
+
+namespace {
+void cpuid_regs(unsigned leaf, unsigned sub, unsigned r[4]) {
+#if defined(_MSC_VER)
+    int x[4];
+    __cpuidex(x, (int) leaf, (int) sub);
+    for (int i = 0; i < 4; ++i) r[i] = (unsigned) x[i];
+#else
+    __cpuid_count(leaf, sub, r[0], r[1], r[2], r[3]);
+#endif
+}
+}  // namespace
+
+int iq256_gather_setting() {
+    static const int s = [] {
+        const char* v = std::getenv("STRATA_IQ256_GATHER");
+        if (v == nullptr || v[0] == '\0') return -1;
+        return std::atoi(v) != 0 ? 1 : 0;
+    }();
+    return s;
+}
+
+bool cpu_gather_fast() {
+    static const bool ok = [] {
+        if (cpu_isa_cap() < 3) return false;   // STRATA_FORCE_ISA: as on a CPU that stops at AVX2
+        unsigned r[4];
+        cpuid_regs(0, 0, r);
+        const unsigned max_leaf = r[0];
+        if (!(r[1] == 0x756e6547u && r[3] == 0x49656e69u && r[2] == 0x6c65746eu)) return false;   // "GenuineIntel"
+        if (max_leaf < 7) return false;
+        cpuid_regs(7, 0, r);
+        if (r[0] < 1) return false;            // no sub-leaf 1
+        cpuid_regs(7, 1, r);
+        if (!((r[0] >> 4) & 1u)) return false; // AVX-VNNI: Alder Lake, Sapphire Rapids and later
+        // The E-core-only parts with AVX-VNNI are not hybrid, so the core type below may not tell them apart: Alder
+        // Lake-N / Twin Lake (6/BEh), Grand Ridge (6/B6h), Sierra Forest (6/AFh), Clearwater Forest (6/DDh).
+        cpuid_regs(1, 0, r);
+        const unsigned family = (r[0] >> 8) & 0xf, model = ((r[0] >> 4) & 0xf) | (((r[0] >> 16) & 0xf) << 4);
+        if (family == 6 && (model == 0xBE || model == 0xB6 || model == 0xAF || model == 0xDD)) return false;
+        return true;
+    }();
+    return ok;
+}
+
+bool cpu_gather_fast_here() {
+    if (!cpu_gather_fast()) return false;
+    static const unsigned max_leaf = [] { unsigned r[4]; cpuid_regs(0, 0, r); return r[0]; }();
+    static const bool hybrid = [] { unsigned r[4]; cpuid_regs(7, 0, r); return ((r[3] >> 15) & 1u) != 0; }();
+    // A CPUID can cost a microsecond under a hypervisor (Windows with VBS), so once per thread.
+    thread_local int here = -1;
+    if (here < 0) {
+        unsigned type = 0;
+        if (max_leaf >= 0x1A) {
+            unsigned r[4];
+            cpuid_regs(0x1A, 0, r);
+            type = r[0] >> 24;
+        }
+        // 40h a performance core, 20h an E-core; no core type is a non-hybrid part (P-cores, see cpu_gather_fast)
+        here = type == 0x40 || (type == 0 && !hybrid) ? 1 : 0;
+    }
+    return here == 1;
+}
+
+std::string cpu_name() {
+    unsigned r[12] = {};
+#if defined(_MSC_VER)
+    int x[4];
+    __cpuid(x, (int) 0x80000000u);
+    if ((unsigned) x[0] < 0x80000004u) return "unknown";
+    for (unsigned i = 0; i < 3; ++i) {
+        __cpuid(x, (int) (0x80000002u + i));
+        for (int j = 0; j < 4; ++j) r[i * 4 + j] = (unsigned) x[j];
+    }
+#else
+    unsigned a = 0, b = 0, c = 0, d = 0;
+    __cpuid(0x80000000u, a, b, c, d);
+    if (a < 0x80000004u) return "unknown";
+    for (unsigned i = 0; i < 3; ++i) __cpuid(0x80000002u + i, r[i * 4], r[i * 4 + 1], r[i * 4 + 2], r[i * 4 + 3]);
+#endif
+    char s[49] = {};
+    std::memcpy(s, r, 48);
+    std::string name(s);
+    const size_t b0 = name.find_first_not_of(' '), b1 = name.find_last_not_of(' ');
+    return b0 == std::string::npos ? std::string("unknown") : name.substr(b0, b1 - b0 + 1);
+}
+
 void q2_rows_any(const uint8_t* w, size_t row_bytes, int nblocks, const ActQ* const* a, int nt, float* const* out,
                  int r0, int r1) {
     if (cpu_avx512_ok()) q2_0_gguf_rows_multi(w, row_bytes, nblocks, a, nt, out, r0, r1);
