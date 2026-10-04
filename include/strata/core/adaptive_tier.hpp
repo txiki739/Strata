@@ -95,6 +95,9 @@ private:
     std::vector<Move> queued_;
     std::vector<std::pair<int32_t, int32_t>> pending_;
     size_t admitted_ = 0, sent_ = 0, staged_ = 0;
+    // The moves whose batch has landed, [0, landed_): retire() runs inside the pumps too (they retire batches to free
+    // staging blocks and flight slots), so what it learns is kept here for apply_pending rather than returned and lost.
+    size_t landed_ = 0;
     uint64_t off_ = 0;
     cudaEvent_t t0_ = nullptr, t1_ = nullptr;   // around the last timed copies, whose `timed_` bytes have not landed
     uint64_t timed_ = 0;
@@ -128,7 +131,7 @@ private:
     bool send(std::string& err);
     bool time_begin(bool worth);
     bool end_batch(bool timed, uint64_t bytes, std::string& err);
-    size_t retire();
+    void retire();
 };
 
 }  // namespace strata::core

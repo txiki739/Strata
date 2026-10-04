@@ -11,6 +11,12 @@
 
 namespace strata::core {
 namespace {
+// STRATA_TIER_TRACE=1: one stderr line per update (skipped or ranked) with the queue and the residency, to see whether
+// the tier keeps the VRAM tier full across a session.
+bool tier_trace() {
+    static const bool on = std::getenv("STRATA_TIER_TRACE") != nullptr;
+    return on;
+}
 struct OnDevice {   // the tier's GPU current for one call (when it has one), the main one again afterwards
     int main;
     bool set;
@@ -219,7 +225,21 @@ bool AdaptiveTier::adapt(std::vector<float>& usage, std::string& err, bool decay
     const auto t0 = std::chrono::steady_clock::now();
     if (!failed_.empty()) { err = failed_; return false; }
     apply_pending(false);
-    if (wait_ && admitted_ < queued_.size()) return true;
+    static int64_t trace_calls = 0;
+    ++trace_calls;
+    auto resident = [&] {
+        int64_t n = 0;
+        for (const int32_t s : *res_) n += s >= 0;
+        return n;
+    };
+    if (wait_ && admitted_ < queued_.size()) {
+        if (tier_trace())
+            std::fprintf(stderr, "tier trace #%lld skip queued=%zu admitted=%zu sent=%zu staged=%zu flying=%d "
+                                 "resident=%lld free=%lld blocked_stage=%d\n", (long long) trace_calls, queued_.size(),
+                         admitted_, sent_, staged_, flying_, (long long) resident(), (long long) free_slots(),
+                         (int) stage_blocked_);
+        return true;
+    }
     // the moves whose residents are still in place give way to this call's (ranked again if still worth it)
     for (size_t i = staged_; i < queued_.size(); ++i) {
         const Move& m = queued_[i];
@@ -236,6 +256,7 @@ bool AdaptiveTier::adapt(std::vector<float>& usage, std::string& err, bool decay
     queued_.erase(queued_.begin(), queued_.begin() + (ptrdiff_t) admitted_);
     pending_.erase(pending_.begin(), pending_.begin() + (ptrdiff_t) admitted_);
     for (int b = 0; b < flying_; ++b) batch_sent_[(first_ + b) % kBatches] -= admitted_;
+    landed_ -= admitted_;   // apply_pending above admitted every landed move, so landed_ == admitted_ here
     sent_ -= admitted_;
     staged_ -= admitted_;
     admitted_ = 0;
@@ -295,18 +316,25 @@ bool AdaptiveTier::adapt(std::vector<float>& usage, std::string& err, bool decay
     if (decay)
         for (float& v : usage) v *= 0.7f;
     ms += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
+    if (tier_trace())
+        std::fprintf(stderr, "tier trace #%lld rank moves=%zu queued=%zu sent=%zu staged=%zu flying=%d resident=%lld "
+                             "free=%lld swaps=%lld fills=%lld dropped=%lld\n", (long long) trace_calls, moves.size(),
+                     queued_.size(), sent_, staged_, flying_, (long long) resident(), (long long) free_slots(),
+                     (long long) swaps, (long long) fills, (long long) dropped);
     return true;
 }
 
-// Retires the batches whose events have landed: advances the ring and returns the highest moves-sent index among them.
-size_t AdaptiveTier::retire() {
-    size_t landed = admitted_;   // the batches landed, oldest first
+// Retires the batches whose events have landed: advances the ring and raises `landed_` to the highest moves-sent index
+// among them.  **IT DOES NOT RETURN IT**: the pumps retire batches too (for their staging blocks and the kMaxFlying cap),
+// and when they discarded the index a batch landing just before a pump was never admitted.  Its 96 evicted residents
+// stayed empty and, with an update waiting for the previous one's (burst), the tier never ranked again: a session past
+// that point decoded on a frozen cache (edit 69 tok/s at 35% hits instead of 136 at 79%, Ryzen 9 5950X + RTX 3090, 12 pool workers).
+void AdaptiveTier::retire() {
     for (; flying_ > 0 && cudaEventQuery(evs_[first_]) == cudaSuccess; first_ = (first_ + 1) % kBatches, --flying_) {
         for (const size_t blk : batch_stage_[first_]) stage_free_.push_back(blk);   // its copies have read the blocks
         batch_stage_[first_].clear();
-        landed = std::max(landed, batch_sent_[first_]);
+        landed_ = std::max(landed_, batch_sent_[first_]);
     }
-    return landed;
 }
 
 void AdaptiveTier::apply_pending(bool wait) {
@@ -327,10 +355,10 @@ void AdaptiveTier::apply_pending(bool wait) {
         OnDevice on(dev_, main_);
         cudaStreamSynchronize(stream_);
     }
-    size_t landed = std::max(admitted_, retire());   // the batches landed, oldest first
-    if (landed == admitted_) return;
+    retire();   // the batches landed, oldest first (or already retired by a pump: landed_ remembers them)
+    if (landed_ <= admitted_) return;
     std::vector<int32_t>& res = *res_;
-    for (; admitted_ < landed; ++admitted_) res[(size_t) pending_[admitted_].first] = pending_[admitted_].second;
+    for (; admitted_ < landed_; ++admitted_) res[(size_t) pending_[admitted_].first] = pending_[admitted_].second;
 }
 
 }  // namespace strata::core
