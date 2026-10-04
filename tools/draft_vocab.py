@@ -10,12 +10,27 @@ Chinese drafted almost nothing (#137).  This adds whole scripts to a subset:
 
 --add takes han, kana, hangul, cjk_punct, or cjk (all four).  The base ids keep their order; the added ones follow in
 id order.  --stats prints what a subset holds.
+
+A language without a script of its own (Spanish shares the Latin one with English) is added from a corpus instead:
+the tokens the model writes in it.  --add-corpus takes files of token ids (comma-separated, any number of lines, as
+for example the model's own answers to a set of prompts), --add-text plain text files (tokenized here); the tokens seen
+at least --min-count times that the subset lacks are added:
+
+    python tools/draft_vocab.py --gguf <model>-00001-of-0000N.gguf --base data/draft_vocab.bin \
+        --add-corpus ../Strata-data/corpus-es/ids.txt --min-count 1 --add-latin-words --out data/draft_vocab_es.bin
+
+A corpus only covers its own topics (the sky's colours were missing from a 28K-token one), so --add-latin-words adds
+every whole lowercase word token of a-z and á é í ó ú ñ ü (an optional leading space; ~51K ids) as well.  Measured
+on an RTX 3090 with UD-Q4_K_XL: Spanish prose drafts went from 45% to 66% accepted
+and decoded +20%, English and code 0..+5%, from a head of 95K ids instead of 40.5K (+141 MiB of draft head in VRAM).
 """
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from array import array
+from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -54,6 +69,10 @@ def main() -> int:
     ap.add_argument("--base", help="the subset to extend (int32 ids)")
     ap.add_argument("--add", default="", help="comma list: han, kana, hangul, cjk_punct, cjk")
     ap.add_argument("--out", help="where to write the new subset")
+    ap.add_argument("--add-corpus", action="append", default=[], help="a file of token ids the language uses")
+    ap.add_argument("--add-text", action="append", default=[], help="a text file in the language")
+    ap.add_argument("--min-count", type=int, default=2, help="a corpus token is added from this many uses (2)")
+    ap.add_argument("--add-latin-words", action="store_true", help="every whole lowercase Latin word token")
     ap.add_argument("--stats", action="store_true", help="print what the base (and the new) subset holds")
     a = ap.parse_args()
 
@@ -72,6 +91,23 @@ def main() -> int:
         want.update(names)
     have = set(base)
     added = [i for i in range(n) if i not in have and kinds[i] & want]
+    if a.add_corpus or a.add_text:
+        freq = Counter()
+        for path in a.add_corpus:
+            freq.update(int(x) for x in Path(path).read_text().replace("\n", ",").split(",") if x.strip())
+        for path in a.add_text:
+            freq.update(tok.encode(Path(path).read_text(encoding="utf-8")))
+        seen = have | set(added)
+        corpus = sorted(i for i, c in freq.items() if c >= a.min_count and 0 <= i < n and i not in seen)
+        print(f"corpus: {sum(freq.values())} tokens, {len(freq)} distinct, {len(corpus)} added "
+              f"(seen {a.min_count}+ times, not in the subset)")
+        added = sorted(added + corpus)
+    if a.add_latin_words:
+        word = re.compile(r"^ ?[a-záéíóúñü]+$")
+        seen = have | set(added)
+        words = [i for i in range(n) if i not in seen and (t := token_text(tok, i)) is not None and word.match(t)]
+        print(f"latin words: {len(words)} added")
+        added = sorted(added + words)
     ids = base + added
 
     def stats(label, sel):
