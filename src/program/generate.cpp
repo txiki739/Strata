@@ -242,6 +242,9 @@ struct Options {
     int second_gpu_reserve_mib = 2048;
     double second_gpu_min_mb = 4.0;   ///< a layer's misses from which it takes its share (smaller: the CPU is quicker)
     double second_gpu_prefetch_mb = 12.0;   ///< per layer, the likeliest experts no GPU holds copied to it ahead (0 = off)
+    /// Keep GPU 1 resident and executing, but do not adapt its residency while the main tier adapts.
+    /// The default remains coupled dual-tier adaptation.
+    bool no_second_gpu_adapt = false;
     double head_split = 0.45;                ///< the second GPU's share of the head's rows (0: all on the main GPU)
     /// Plan v0.3 P6: the share (0..1) of each layer's distinct missed experts the GPU reads over PCIe from the
     /// pinned arena while the CPU computes the rest (verify windows).
@@ -375,6 +378,8 @@ void usage() {
                  "  --second-gpu-prefetch-mb M  per layer, copy its likeliest experts that no GPU holds (the next\n"
                  "                       layer's router on this layer's input), up to M MiB, to it while the RAM is idle\n"
                  "                       (default 12: ~0.28 ms at its ~48 GB/s; 0 = off)\n"
+                 "  --no-second-gpu-adapt  with --second-gpu: keep GPU 1\'s resident expert assignment static while\n"
+                 "                       the main GPU\'s adaptive tier continues to replace experts\n"
                  "  --head-split F       with --second-gpu: its share of the output head's rows (default 0.45;\n"
                  "                       each GPU streams its part after the last layer; 0 = all on the main GPU)\n"
                  "  --no-prompt-offload  with --second-gpu: the prompt path streams the experts the main GPU's cache\n"
@@ -905,6 +910,7 @@ int main(int argc, char** argv) {
         else if (a == "--second-gpu-reserve-mib") o.second_gpu_reserve_mib = std::atoi(next("--second-gpu-reserve-mib"));
         else if (a == "--second-gpu-min-mb") o.second_gpu_min_mb = std::atof(next("--second-gpu-min-mb"));
         else if (a == "--second-gpu-prefetch-mb") o.second_gpu_prefetch_mb = std::atof(next("--second-gpu-prefetch-mb"));
+        else if (a == "--no-second-gpu-adapt") o.no_second_gpu_adapt = true;
         else if (a == "--head-split") o.head_split = std::atof(next("--head-split"));
         else if (a == "--pcie-frac") o.pcie_frac = std::atof(next("--pcie-frac"));
         else if (a == "--adapt-every") o.adapt_every = std::atoi(next("--adapt-every"));
@@ -2380,9 +2386,9 @@ int main(int argc, char** argv) {
     // the second tier ranks after the first on the same counts, and decays them
     std::string adapt_err;
     auto adapt = [&]() -> bool {
-        const bool two = tier2.on();
-        return tier.adapt(drive.d.usage, adapt_err, !two) &&
-               (!two || (tier2.adapt(drive.d.usage, adapt_err) && pump_gap(&drive, adapt_err)));
+        const bool second_adapts = tier2.on() && !o.no_second_gpu_adapt;
+        return tier.adapt(drive.d.usage, adapt_err, !second_adapts) &&
+               (!second_adapts || (tier2.adapt(drive.d.usage, adapt_err) && pump_gap(&drive, adapt_err)));
     };
     drive.adapt = adapt;
     if (tier.on()) drive.tier1 = &tier;   // its copies in pieces, or at once without a second GPU (Drive::tier1)
