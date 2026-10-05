@@ -4,6 +4,7 @@
 // quantize.cu at the commit in third_party/ggml/VERSION.txt; MIT license, third_party/ggml/LICENSE), the dot products
 // in iq_dot.cuh.
 #include "strata/kernels/iq_kernels.hpp"
+#include "strata/kernels/q8_1_finite.hpp"
 #include "iq_dot.cuh"
 #include "q8_1_il.cuh"
 
@@ -135,11 +136,11 @@ __global__ void __launch_bounds__(GUS_WARPS * 32, gus_min_blocks<TG>()) native_g
                 amax = fmaxf(amax, __shfl_xor_sync(0xffffffffu, amax, o));
                 sum += __shfl_xor_sync(0xffffffffu, sum, o);
             }
-            const float d = amax / 127.0f;
-            const int8_t q = amax == 0.0f ? 0 : roundf(xi / d);
+            const float d = q8_1_finite(amax / 127.0f);   // #606: q8_1_finite.hpp - the same bits for every finite block
+            const int8_t q = q8_1_quant(xi, d, amax);
             block_q8_1* y = hq + (size_t) e * hb + c;
             y->qs[lane] = q;
-            if (lane == 0) y->ds = make_half2(d, sum);
+            if (lane == 0) y->ds = q8_1_ds(d, sum);
         }
         __syncthreads();
     }
@@ -220,11 +221,11 @@ __global__ void quantize_q8_1_kernel(const float* __restrict__ x, block_q8_1* __
         amax = fmaxf(amax, __shfl_xor_sync(0xffffffffu, amax, o));
         sum += __shfl_xor_sync(0xffffffffu, sum, o);
     }
-    const float d = amax / 127.0f;
-    const int8_t q = amax == 0.0f ? 0 : roundf(xi / d);
+    const float d = q8_1_finite(amax / 127.0f);   // #606: q8_1_finite.hpp - the same bits for every finite block
+    const int8_t q = q8_1_quant(xi, d, amax);
     const long long ib = i / 32, iqs = i % 32;
     y[ib].qs[iqs] = q;
-    if (iqs == 0) y[ib].ds = make_half2(d, sum);
+    if (iqs == 0) y[ib].ds = q8_1_ds(d, sum);
 }
 
 // ---------------------------------------------------------------- dequant (dequantize.cuh)

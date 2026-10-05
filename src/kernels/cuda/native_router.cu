@@ -21,6 +21,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 #include "strata/kernels/native_router.hpp"
+#include "strata/kernels/q8_1_finite.hpp"
 #include "strata/kernels/bf16_bits.hpp"
 #include "hit_plan.cuh"
 #include "mmvf_multi.cuh"
@@ -178,15 +179,16 @@ __device__ __forceinline__ void quantize_rows(const VerifyRouterArgs& a, int b) 
         float sum = x[j];
 #pragma unroll
         for (int o = 16; o > 0; o >>= 1) sum = add_rn(sum, __shfl_xor_sync(0xffffffffu, sum, o));
-        const float d = div_rn(__uint_as_float(amax), 127.0f);
+        const float d = q8_1_finite(div_rn(__uint_as_float(amax), 127.0f));   // #606: q8_1_finite.hpp - the same bits for every finite block
         float q = 0.0f;
         if (amax != 0u) {   // roundf: half away from zero
             const float v = div_rn(x[j], d), r = truncf(v);
             q = fabsf(v - r) >= 0.5f ? r + copysignf(1.0f, v) : r;
+            q = q > 127.0f ? 127.0f : q < -127.0f ? -127.0f : q;   // only a clamped (overflowed) block reaches it
         }
         uint8_t* q1 = reinterpret_cast<uint8_t*>(s_q1) + (j * 8 + warp) * kQ81Bytes;
         q1[4 + lane] = (uint8_t) (int8_t) q;
-        if (lane == 0) *reinterpret_cast<half2*>(q1) = __halves2half2(__float2half(d), __float2half(sum));
+        if (lane == 0) *reinterpret_cast<half2*>(q1) = q8_1_ds(d, sum);
         // Q8_K: the superblock's first value of the largest magnitude, from each warp's
         const int first = __reduce_min_sync(0xffffffffu, ax == amax ? lane : 32);
         const float wmax = __shfl_sync(0xffffffffu, x[j], first & 31);
