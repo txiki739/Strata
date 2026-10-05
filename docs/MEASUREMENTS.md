@@ -26,7 +26,7 @@ keeps the most used ones in VRAM (an adaptive cache); the CPU computes the rest.
 | GGUF files | 3 | 4 |
 | Expert weights | 55.4 GiB | 71.7 GiB |
 | Expert formats (gate/up · down) | IQ3_S (47 layers), IQ4_XS (1) · IQ4_NL (43), Q8_0 (5) | Q4_K (47), Q5_K (1) · Q5_1 (43), Q8_0 (5) |
-| RAM taken by the engine | ~59 GB | ~81 GB |
+| RAM taken by the engine | ~58 GiB | ~81 GB |
 | CPU expert kernels | compute-bound: scale with cores | bandwidth-bound: DDR4 saturates at ~4 cores |
 
 Both: 200,192 tokens of context, int8 KV cache, the MTP draft layer with a Spanish draft vocabulary
@@ -51,8 +51,8 @@ Both: 200,192 tokens of context, int8 KV cache, the MTP draft layer with a Spani
   out, reasoning on), `es_doc` (an 18,076-token document, then 400 out), `code` (62 tokens, 600 out), `edit` (a
   3,340-token script returned edited, ~2,600 out), `proto5k` (a 5,296-token prompt, 256 out). The long texts are
   private notes and are not published.
-- Decode speed = the geometric mean of the six. Runs interleaved with the baseline, two per config (one for
-  UD-Q4_K_XL on two GPUs).
+- Decode speed = the geometric mean of the six; each config is the mean of every run of this code and these
+  settings: 4 (UD-IQ4_XS, 1 GPU), 6 (UD-IQ4_XS, 2 GPUs), 4 (UD-Q4_K_XL, 1 GPU), 3 (UD-Q4_K_XL, 2 GPUs).
 - Agent sessions: 18 turns through `serve/server.py`, the conversation growing to ~31K tokens (pasted source files,
   docs, topic changes), 600 tokens per answer, three runs per variant.
 
@@ -62,29 +62,43 @@ Decode speed (tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
 |---|---:|---:|---:|---:|
-| es_chat | 85.9 | 112.7 | 62.5 | 89.8 |
-| es_think | 88.1 | 110.5 | 72.7 | 81.4 |
-| es_doc (after 18K) | 70.0 | 100.5 | 54.6 | 69.8 |
-| code | 88.2 | 118.6 | 67.8 | 84.3 |
-| edit | 114.2 | 163.8 | 87.7 | 117.6 |
-| proto5k (after 5K) | 63.1 | 66.9 | 48.6 | 53.4 |
-| **Geometric mean** | **83.4** | **108.4** | **64.5** | **80.4** |
+| es_chat | 85.9 | 112.7 | 62.8 | 87.3 |
+| es_think | 88.5 | 111.0 | 74.8 | 80.4 |
+| es_doc (after 18K) | 70.0 | 99.1 | 54.7 | 72.7 |
+| code | 87.4 | 119.5 | 67.6 | 84.1 |
+| edit | 113.8 | 161.6 | 87.9 | 117.7 |
+| proto5k (after 5K) | 62.4 | 66.4 | 48.8 | 53.8 |
+| **Geometric mean** | **83.1** | **108.0** | **64.9** | **80.5** |
 
 Prompt reading (prefill, tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
 |---|---:|---:|---:|---:|
-| 18,076 tokens | 1,800 | 1,806 | 1,696 | 1,725 |
-| 5,296 tokens | 1,130 | 1,464 | 869 | 1,065 |
-| 3,340 tokens | 810 | 1,031 | 637 | 760 |
+| 18,076 tokens | 1,800 | 1,813 | 1,699 | 1,730 |
+| 5,296 tokens | 1,131 | 1,463 | 869 | 1,067 |
+| 3,340 tokens | 811 | 1,030 | 638 | 758 |
 
-- The second GPU adds **+30%** to UD-IQ4_XS and **+25%** to UD-Q4_K_XL (it holds ~14.5 GB more experts and computes
+- The second GPU adds **+30%** to UD-IQ4_XS and **+24%** to UD-Q4_K_XL (it holds ~14.5 GB more experts and computes
   its share of each layer while the CPU computes its own). It barely changes the 18K prefill, which is bound by the
   3090's x8 link.
-- Expert VRAM hit rate: 80.8% / 89.1% (UD-IQ4_XS, 1 / 2 GPUs), 77.7% / 83.3% (UD-Q4_K_XL). Draft acceptance ~89%.
+- Expert VRAM hit rate: 80.8% / 89.1% (UD-IQ4_XS, 1 / 2 GPUs), 77.8% / 83.4% (UD-Q4_K_XL). Draft acceptance ~89%.
 - Agent sessions (one GPU): UD-IQ4_XS 77.8 tok/s, UD-Q4_K_XL 59.7 tok/s.
-- UD-IQ4_XS is faster than UD-Q4_K_XL here (+30% on one GPU, +35% on two): fewer bytes per expert, so more of them fit
+- UD-IQ4_XS is faster than UD-Q4_K_XL here (+28% on one GPU, +34% on two): fewer bytes per expert, so more of them fit
   in VRAM, and its compute-bound CPU kernels use all 7 workers. UD-Q4_K_XL is the larger quant of the two.
+
+## With 64 GB of RAM
+
+The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a systemd
+cgroup (`MemoryMax=60G`; the engine's memory and the mapped files were all charged to it). UD-Q4_K_XL's 71.7 GiB of
+experts do not fit: it runs from a pack with `experts.bin` (`iq_pack.py --experts-bin`) through `--mmap-experts`,
+reading from the NVMe (Crucial P3 Plus).
+
+| 64 GB of RAM | Decode | Prefill 18K / 5K / 3K | Cache hits | With 128 GB |
+|---|---:|---:|---:|---:|
+| UD-IQ4_XS, 1 GPU | 83.5 | 1,790 / 1,132 / 813 | 81% | 83.1 |
+| UD-IQ4_XS, 2 GPUs | 107.5 | 1,804 / 1,460 / 1,033 | 89% | 108.0 |
+| UD-Q4_K_XL, 1 GPU (2 runs) | 24.4 | 432 / 154 / 133 | 54% | 64.9 |
+| UD-Q4_K_XL, 2 GPUs | 37.1 | 532 / 195 / 155 | 78% | 80.5 |
 
 ## What the changes on top of eddoursul's `custom` gave
 

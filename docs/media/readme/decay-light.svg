@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="760" height="300" viewBox="0 0 760 300" role="img" aria-label="UD-IQ4_XS on the RTX 3090: --adapt-decay" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans',Helvetica,Arial,sans-serif">
+<title>UD-IQ4_XS on the RTX 3090: --adapt-decay</title>
+<line x1="54" y1="260.0" x2="610" y2="260.0" stroke="#d1d9e0" stroke-width="1"/>
+<text x="46" y="264.0" font-size="11" fill="#59636e" text-anchor="end">50</text>
+<line x1="54" y1="202.5" x2="610" y2="202.5" stroke="#d1d9e0" stroke-width="1"/>
+<text x="46" y="206.5" font-size="11" fill="#59636e" text-anchor="end">60</text>
+<line x1="54" y1="145.0" x2="610" y2="145.0" stroke="#d1d9e0" stroke-width="1"/>
+<text x="46" y="149.0" font-size="11" fill="#59636e" text-anchor="end">70</text>
+<line x1="54" y1="87.5" x2="610" y2="87.5" stroke="#d1d9e0" stroke-width="1"/>
+<text x="46" y="91.5" font-size="11" fill="#59636e" text-anchor="end">80</text>
+<line x1="54" y1="30.0" x2="610" y2="30.0" stroke="#d1d9e0" stroke-width="1"/>
+<text x="46" y="34.0" font-size="11" fill="#59636e" text-anchor="end">90</text>
+<text x="54.0" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.70</text>
+<text x="146.7" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.85</text>
+<text x="239.3" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.92</text>
+<text x="332.0" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.95</text>
+<text x="424.7" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.97</text>
+<text x="517.3" y="280" font-size="11" fill="#59636e" text-anchor="middle">0.99</text>
+<text x="610.0" y="280" font-size="11" fill="#59636e" text-anchor="middle">1.00</text>
+<text x="332.0" y="296" font-size="12" fill="#59636e" text-anchor="middle">--adapt-decay (the share of the routing counts kept after each cache update)</text>
+<text x="12" y="145.0" font-size="12" fill="#59636e" text-anchor="middle" transform="rotate(-90 12 145.0)">tokens/s</text>
+<path d="M54.0,82.3 L146.7,80.6 L239.3,73.7 L332.0,72.6 L424.7,81.2 L517.3,135.8 L610.0,219.2" fill="none" stroke="#1b9247" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="54.0" cy="82.3" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="146.7" cy="80.6" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="239.3" cy="73.7" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="332.0" cy="72.6" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="424.7" cy="81.2" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="517.3" cy="135.8" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<circle cx="610.0" cy="219.2" r="4.5" fill="#1b9247" stroke="#ffffff" stroke-width="2"/>
+<text x="620.0" y="223.2" font-size="12" fill="#1f2328"> 57.1</text>
+<text x="239.3" y="61.7" font-size="12" fill="#1f2328" text-anchor="middle">0.92 (used)</text></svg>

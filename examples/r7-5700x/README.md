@@ -4,7 +4,7 @@ The configs measured in [docs/MEASUREMENTS.md](../../docs/MEASUREMENTS.md), for 
 
 - `ud-iq4_xs-3090.json`: unsloth's UD-IQ4_XS on the RTX 3090 alone (83 tok/s).
 - `ud-iq4_xs-dual.json`: the same with the RTX 5060 Ti as a second expert tier (108 tok/s).
-- `ud-q4_k_xl-3090.json` / `ud-q4_k_xl-dual.json`: unsloth's UD-Q4_K_XL (65 / 80 tok/s).
+- `ud-q4_k_xl-3090.json` / `ud-q4_k_xl-dual.json`: unsloth's UD-Q4_K_XL (65 / 81 tok/s; with 64 GB of RAM it reads its experts from the NVMe: 24 / 37).
 
 Their paths are relative to the Strata folder and follow setup's data layout (`../Strata-data`).
 

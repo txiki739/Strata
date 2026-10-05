@@ -26,7 +26,7 @@ en VRAM los más usados (una caché adaptativa); la CPU calcula el resto.
 | Ficheros GGUF | 3 | 4 |
 | Pesos de los expertos | 55,4 GiB | 71,7 GiB |
 | Formatos de los expertos (gate/up · down) | IQ3_S (47 capas), IQ4_XS (1) · IQ4_NL (43), Q8_0 (5) | Q4_K (47), Q5_K (1) · Q5_1 (43), Q8_0 (5) |
-| RAM que ocupa el motor | ~59 GB | ~81 GB |
+| RAM que ocupa el motor | ~58 GiB | ~81 GB |
 | Kernels de CPU de los expertos | limitados por cálculo: escalan con los núcleos | limitados por ancho de banda: la DDR4 se satura con ~4 núcleos |
 
 En los dos: 200.192 tokens de contexto, caché KV int8, la capa de borrador MTP con vocabulario español
@@ -51,8 +51,8 @@ En los dos: 200.192 tokens de contexto, caché KV int8, la capa de borrador MTP 
   tokens, 700 de respuesta, con razonamiento), `es_doc` (un documento de 18.076 tokens y 400 de respuesta), `code`
   (62 tokens, 600 de respuesta), `edit` (un script de 3.340 tokens devuelto editado, ~2.600), `proto5k` (un prompt
   de 5.296 tokens, 256 de respuesta). Los textos largos son notas privadas y no se publican.
-- Velocidad de generación = media geométrica de los seis. Rondas intercaladas con la base, dos por configuración (una
-  en UD-Q4_K_XL con dos gráficas).
+- Velocidad de generación = media geométrica de los seis; cada configuración es la media de todas las rondas de
+  este código y estos ajustes: 4 (UD-IQ4_XS, 1 GPU), 6 (UD-IQ4_XS, 2 GPU), 4 (UD-Q4_K_XL, 1 GPU), 3 (UD-Q4_K_XL, 2 GPU).
 - Sesiones de agente: 18 turnos a través de `serve/server.py`, con la conversación creciendo hasta ~31K tokens
   (ficheros de código pegados, documentación, cambios de tema), 600 tokens por respuesta, tres rondas por variante.
 
@@ -62,31 +62,45 @@ Velocidad de generación (tokens/s):
 
 | Texto | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
 |---|---:|---:|---:|---:|
-| es_chat | 85,9 | 112,7 | 62,5 | 89,8 |
-| es_think | 88,1 | 110,5 | 72,7 | 81,4 |
-| es_doc (tras 18K) | 70,0 | 100,5 | 54,6 | 69,8 |
-| code | 88,2 | 118,6 | 67,8 | 84,3 |
-| edit | 114,2 | 163,8 | 87,7 | 117,6 |
-| proto5k (tras 5K) | 63,1 | 66,9 | 48,6 | 53,4 |
-| **Media geométrica** | **83,4** | **108,4** | **64,5** | **80,4** |
+| es_chat | 85,9 | 112,7 | 62,8 | 87,3 |
+| es_think | 88,5 | 111,0 | 74,8 | 80,4 |
+| es_doc (tras 18K) | 70,0 | 99,1 | 54,7 | 72,7 |
+| code | 87,4 | 119,5 | 67,6 | 84,1 |
+| edit | 113,8 | 161,6 | 87,9 | 117,7 |
+| proto5k (tras 5K) | 62,4 | 66,4 | 48,8 | 53,8 |
+| **Media geométrica** | **83,1** | **108,0** | **64,9** | **80,5** |
 
 Lectura del prompt (prefill, tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
 |---|---:|---:|---:|---:|
-| 18.076 tokens | 1.800 | 1.806 | 1.696 | 1.725 |
-| 5.296 tokens | 1.130 | 1.464 | 869 | 1.065 |
-| 3.340 tokens | 810 | 1.031 | 637 | 760 |
+| 18.076 tokens | 1.800 | 1.813 | 1.699 | 1.730 |
+| 5.296 tokens | 1.131 | 1.463 | 869 | 1.067 |
+| 3.340 tokens | 811 | 1.030 | 638 | 758 |
 
-- La segunda gráfica suma **+30 %** a UD-IQ4_XS y **+25 %** a UD-Q4_K_XL: guarda ~14,5 GB más de expertos y calcula su
+- La segunda gráfica suma **+30 %** a UD-IQ4_XS y **+24 %** a UD-Q4_K_XL: guarda ~14,5 GB más de expertos y calcula su
   parte de cada capa mientras la CPU calcula la suya. Apenas cambia el prefill de 18K, limitado por el enlace x8 de la
   3090.
-- Aciertos de expertos en VRAM: 80,8 % / 89,1 % (UD-IQ4_XS, 1 / 2 GPU), 77,7 % / 83,3 % (UD-Q4_K_XL). Aceptación de
+- Aciertos de expertos en VRAM: 80,8 % / 89,1 % (UD-IQ4_XS, 1 / 2 GPU), 77,8 % / 83,4 % (UD-Q4_K_XL). Aceptación de
   los borradores ~89 %.
 - Sesiones de agente (una gráfica): UD-IQ4_XS 77,8 tok/s, UD-Q4_K_XL 59,7 tok/s.
-- Aquí UD-IQ4_XS es más rápido que UD-Q4_K_XL (+30 % con una gráfica, +35 % con dos): cada experto ocupa menos, así
+- Aquí UD-IQ4_XS es más rápido que UD-Q4_K_XL (+28 % con una gráfica, +34 % con dos): cada experto ocupa menos, así
   que caben más en VRAM, y sus kernels de CPU, limitados por cálculo, aprovechan los 7 workers. UD-Q4_K_XL es el
   cuantizado más grande de los dos.
+
+## Con 64 GB de RAM
+
+El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB), caché de disco incluida, con un cgroup de
+systemd (`MemoryMax=60G`; toda la memoria del motor y los ficheros mapeados contaban en él). Los 71,7 GiB de expertos de
+UD-Q4_K_XL no caben: va con un pack con `experts.bin` (`iq_pack.py --experts-bin`) y `--mmap-experts`, leyendo del NVMe
+(Crucial P3 Plus).
+
+| 64 GB de RAM | Generación | Prefill 18K / 5K / 3K | Aciertos de caché | Con 128 GB |
+|---|---:|---:|---:|---:|
+| UD-IQ4_XS, 1 GPU | 83,5 | 1.790 / 1.132 / 813 | 81 % | 83,1 |
+| UD-IQ4_XS, 2 GPU | 107,5 | 1.804 / 1.460 / 1.033 | 89 % | 108,0 |
+| UD-Q4_K_XL, 1 GPU (2 rondas) | 24,4 | 432 / 154 / 133 | 54 % | 64,9 |
+| UD-Q4_K_XL, 2 GPU | 37,1 | 532 / 195 / 155 | 78 % | 80,5 |
 
 ## Lo que han aportado los cambios sobre `custom` de eddoursul
 
