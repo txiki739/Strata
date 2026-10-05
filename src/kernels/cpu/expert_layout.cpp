@@ -2,6 +2,7 @@
 #include "strata/kernels/cpu/expert_layout.hpp"
 
 #include <cstdio>
+#include <cstring>
 #include <cstdlib>
 #include <string>
 #if defined(_MSC_VER)
