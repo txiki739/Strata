@@ -19,12 +19,12 @@
 <line x1="700.0" y1="28" x2="700.0" y2="130" stroke="#d1d9e0" stroke-width="1"/>
 <text x="700.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">120</text>
 <text x="110" y="53.5" font-size="13" fill="#1f2328" text-anchor="end">UD-IQ4_XS</text>
-<path d="M120.0,34.0 h397.6 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-397.6 z" fill="#97c425"/>
-<text x="527.6" y="45" font-size="12" fill="#59636e">83.1</text>
-<path d="M120.0,50.0 h518.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-518.0 z" fill="#1b9247"/>
-<text x="648.0" y="61" font-size="12" fill="#59636e">108.0</text>
+<path d="M120.0,34.0 h400.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-400.1 z" fill="#97c425"/>
+<text x="530.1" y="45" font-size="12" fill="#59636e">83.6</text>
+<path d="M120.0,50.0 h524.8 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-524.8 z" fill="#1b9247"/>
+<text x="654.8" y="61" font-size="12" fill="#59636e">109.4</text>
 <text x="110" y="99.5" font-size="13" fill="#1f2328" text-anchor="end">UD-Q4_K_XL</text>
-<path d="M120.0,80.0 h309.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-309.7 z" fill="#97c425"/>
-<text x="439.7" y="91" font-size="12" fill="#59636e">64.9</text>
+<path d="M120.0,80.0 h306.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-306.3 z" fill="#97c425"/>
+<text x="436.3" y="91" font-size="12" fill="#59636e">64.2</text>
 <path d="M120.0,96.0 h385.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-385.1 z" fill="#1b9247"/>
 <text x="515.1" y="107" font-size="12" fill="#59636e">80.5</text></svg>

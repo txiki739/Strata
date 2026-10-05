@@ -23,21 +23,25 @@ GPU = [("one", "RTX 3090"), ("two", "RTX 3090 + RTX 5060 Ti")]
 # ---- the measurements (Ryzen 7 5700X, 128 GB DDR4-3200; decode = six-prompt geometric mean, tokens/s) ----
 PROMPTS = ["Spanish chat", "Reasoning", "After an 18K document", "Code", "Edit (3.3K script)", "After a 5K prompt"]
 DECODE = {  # prompt order as PROMPTS; mean of every run of this code and these settings (2-6 per config)
-    "iq4": {"one": [85.9, 88.5, 70.0, 87.4, 113.8, 62.4], "two": [112.7, 111.0, 99.1, 119.5, 161.6, 66.4]},
-    "q4": {"one": [62.8, 74.8, 54.7, 67.6, 87.9, 48.8], "two": [87.3, 80.4, 72.7, 84.1, 117.7, 53.8]},
+    "iq4": {"one": [86.0, 87.7, 69.9, 88.5, 114.8, 63.5], "two": [114.9, 113.2, 98.1, 118.7, 165.2, 68.5]},
+    "q4": {"one": [62.5, 69.8, 54.8, 68.1, 87.9, 49.1], "two": [86.1, 81.6, 73.7, 84.6, 118.1, 52.7]},
 }
-MEAN = {"iq4": {"one": 83.1, "two": 108.0}, "q4": {"one": 64.9, "two": 80.5}}
+MEAN = {"iq4": {"one": 83.6, "two": 109.4}, "q4": {"one": 64.2, "two": 80.5}}
 PREFILL_LABELS = ["18,076 tokens", "5,296 tokens", "3,340 tokens"]
-PREFILL = {"iq4": {"one": [1800, 1131, 811], "two": [1813, 1463, 1030]},
-           "q4": {"one": [1699, 869, 638], "two": [1730, 1067, 758]}}
+PREFILL = {"iq4": {"one": [1787, 1131, 811], "two": [1800, 1461, 1036]},
+           "q4": {"one": [1702, 869, 637], "two": [1716, 1066, 765]}}
 STEPS = [("eddoursul custom + fixes", 77.3), ("+ IQ4_XS AVX-2 kernel", 78.0), ("+ AVX2 gather (IQ3_S)", 80.9),
-         ("+ --adapt-decay 0.92", 83.3)]
+         ("+ --adapt-decay 0.92", 83.3),
+         ("+ upstream PRs #863, #851, #606", 83.6)]
 DECAY = [(0.70, 80.9), (0.85, 81.2), (0.92, 82.4), (0.95, 82.6), (0.97, 81.1), (0.99, 71.6), (1.00, 57.1)]
-# 64 GB PC emulated on the same machine: the engine (and its page cache) limited to 60 GiB with a cgroup; UD-Q4_K_XL
+# 64 GB PC emulated on the same machine (measured before the later additions, both columns with the same build): the engine (and its page cache) limited to 60 GiB with a cgroup; UD-Q4_K_XL
 # (71.7 GiB of experts) then reads its experts from the NVMe through --mmap-experts.  None until measured.
 RAM_CATS = ["UD-IQ4_XS · RTX 3090", "UD-IQ4_XS · 3090 + 5060 Ti", "UD-Q4_K_XL · RTX 3090", "UD-Q4_K_XL · 3090 + 5060 Ti"]
 RAM64 = {"128": [83.1, 108.0, 64.9, 80.5],
          "64": [83.5, 107.5, 24.4, 37.1]}
+# decode right after a long prompt (128 tokens of answer), UD-IQ4_XS: one GPU / two
+LONG_CATS = ["after 32K tokens", "after 64K", "after 120K", "after 200K"]
+LONG_DEC = {"one": [67.0, 87.0, 61.5, 54.9], "two": [92.1, 96.8, 98.9, 97.6]}
 WORKERS = {"UD-IQ4_XS": [(4, 65.6), (6, 74.1), (7, 76.6)], "UD-Q4_K_XL": [(4, 63.5), (5, 62.2), (6, 61.6), (7, 62.2)]}
 
 
@@ -147,7 +151,7 @@ def main():
                                      "UD-Q4_K_XL prompt reading speed", t, vmax=max(PREFILL["iq4"]["two"]), dec=0,
                                      lab_w=120),
             "steps": grouped("s", [s for s, _ in STEPS], [("single", "", [v for _, v in STEPS])],
-                             "UD-IQ4_XS on the RTX 3090: what each change gave", t, lab_w=200),
+                             "UD-IQ4_XS on the RTX 3090: what each change gave", t, lab_w=250),
             "decay": line("decay", [("single", "", DECAY)], "UD-IQ4_XS on the RTX 3090: --adapt-decay", t,
                           "--adapt-decay (the share of the routing counts kept after each cache update)",
                           [x for x, _ in DECAY], 50, 90, 10, lambda x: f"{x:.2f}", mark=(0.92, 82.4, "0.92 (used)"), ordinal=True),
@@ -155,6 +159,8 @@ def main():
                             "Decode speed by CPU pool workers, RTX 3090 alone", t, "CPU pool workers (one per physical core)",
                             [4, 5, 6, 7], 55, 80, 5, str),
         }
+        charts["longctx"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC[k]) for k, n in GPU],
+                                    "UD-IQ4_XS decode right after a long prompt", t, lab_w=150)
         if RAM64:
             charts["ram64"] = grouped("r", RAM_CATS, [("r128", "128 GB", RAM64["128"]), ("r64", "64 GB", RAM64["64"])],
                                       "Decode speed with 128 GB and with 64 GB of RAM", t, lab_w=210)

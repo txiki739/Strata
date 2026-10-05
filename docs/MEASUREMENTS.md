@@ -52,7 +52,7 @@ Both: 200,192 tokens of context, int8 KV cache, the MTP draft layer with a Spani
   3,340-token script returned edited, ~2,600 out), `proto5k` (a 5,296-token prompt, 256 out). The long texts are
   private notes and are not published.
 - Decode speed = the geometric mean of the six; each config is the mean of every run of this code and these
-  settings: 4 (UD-IQ4_XS, 1 GPU), 6 (UD-IQ4_XS, 2 GPUs), 4 (UD-Q4_K_XL, 1 GPU), 3 (UD-Q4_K_XL, 2 GPUs).
+  settings: 5 (UD-IQ4_XS, 1 GPU), 4 (UD-IQ4_XS, 2 GPUs), 6 (UD-Q4_K_XL, 1 GPU), 2 (UD-Q4_K_XL, 2 GPUs).
 - Agent sessions: 18 turns through `serve/server.py`, the conversation growing to ~31K tokens (pasted source files,
   docs, topic changes), 600 tokens per answer, three runs per variant.
 
@@ -62,34 +62,46 @@ Decode speed (tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
 |---|---:|---:|---:|---:|
-| es_chat | 85.9 | 112.7 | 62.8 | 87.3 |
-| es_think | 88.5 | 111.0 | 74.8 | 80.4 |
-| es_doc (after 18K) | 70.0 | 99.1 | 54.7 | 72.7 |
-| code | 87.4 | 119.5 | 67.6 | 84.1 |
-| edit | 113.8 | 161.6 | 87.9 | 117.7 |
-| proto5k (after 5K) | 62.4 | 66.4 | 48.8 | 53.8 |
-| **Geometric mean** | **83.1** | **108.0** | **64.9** | **80.5** |
+| es_chat | 86.0 | 114.9 | 62.5 | 86.1 |
+| es_think | 87.7 | 113.2 | 69.8 | 81.6 |
+| es_doc (after 18K) | 69.9 | 98.1 | 54.8 | 73.7 |
+| code | 88.5 | 118.7 | 68.1 | 84.6 |
+| edit | 114.8 | 165.2 | 87.9 | 118.1 |
+| proto5k (after 5K) | 63.5 | 68.5 | 49.1 | 52.7 |
+| **Geometric mean** | **83.6** | **109.4** | **64.2** | **80.5** |
 
 Prompt reading (prefill, tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
 |---|---:|---:|---:|---:|
-| 18,076 tokens | 1,800 | 1,813 | 1,699 | 1,730 |
-| 5,296 tokens | 1,131 | 1,463 | 869 | 1,067 |
-| 3,340 tokens | 811 | 1,030 | 638 | 758 |
+| 18,076 tokens | 1,787 | 1,800 | 1,702 | 1,716 |
+| 5,296 tokens | 1,131 | 1,461 | 869 | 1,066 |
+| 3,340 tokens | 811 | 1,036 | 637 | 765 |
 
-- The second GPU adds **+30%** to UD-IQ4_XS and **+24%** to UD-Q4_K_XL (it holds ~14.5 GB more experts and computes
+- The second GPU adds **+31%** to UD-IQ4_XS and **+25%** to UD-Q4_K_XL (it holds ~14.5 GB more experts and computes
   its share of each layer while the CPU computes its own). It barely changes the 18K prefill, which is bound by the
   3090's x8 link.
-- Expert VRAM hit rate: 80.8% / 89.1% (UD-IQ4_XS, 1 / 2 GPUs), 77.8% / 83.4% (UD-Q4_K_XL). Draft acceptance ~89%.
+- Expert VRAM hit rate: 80.7% / 89.2% (UD-IQ4_XS, 1 / 2 GPUs), 77.8% / 83.3% (UD-Q4_K_XL). Draft acceptance ~89%.
 - Agent sessions (one GPU): UD-IQ4_XS 77.8 tok/s, UD-Q4_K_XL 59.7 tok/s.
-- UD-IQ4_XS is faster than UD-Q4_K_XL here (+28% on one GPU, +34% on two): fewer bytes per expert, so more of them fit
+- UD-IQ4_XS is faster than UD-Q4_K_XL here (+30% on one GPU, +36% on two): fewer bytes per expert, so more of them fit
   in VRAM, and its compute-bound CPU kernels use all 7 workers. UD-Q4_K_XL is the larger quant of the two.
+
+## Long prompts
+
+Prompts of 32K to 200K distinct tokens (prose, then this repo's docs and source code), 128 tokens of answer, one run each.
+
+| Prompt | Read in (prefill tok/s) UD-IQ4_XS 1 / 2 GPUs | UD-Q4_K_XL 1 / 2 GPUs | Decode after: UD-IQ4_XS 1 / 2 GPUs | UD-Q4_K_XL 1 / 2 GPUs |
+|---|---:|---:|---:|---:|
+| 32,022 tokens | 13.4 s (2,382) / 13.7 s (2,342) | 13.7 s (2,337) / 14.1 s (2,270) | 67.0 / 92.1 | 51.8 / 83.3 |
+| 64,022 tokens | 26.6 s (2,410) / 26.3 s (2,437) | 27.0 s (2,368) / 27.1 s (2,359) | 87.0 / 96.8 | 64.3 / 93.3 |
+| 120,019 tokens | 50.9 s (2,360) / 49.2 s (2,439) | 51.7 s (2,321) / 51.0 s (2,354) | 61.5 / 98.9 | 47.4 / 68.3 |
+| 200,019 tokens | 89.5 s (2,234) / 84.6 s (2,365) | 91.8 s (2,178) / 88.8 s (2,252) | 54.9 / 97.6 | 45.8 / 68.2 |
 
 ## With 64 GB of RAM
 
 The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a systemd
-cgroup (`MemoryMax=60G`; the engine's memory and the mapped files were all charged to it). UD-Q4_K_XL's 71.7 GiB of
+cgroup (`MemoryMax=60G`; the engine's memory and the mapped files were all charged to it). Measured before the
+later additions below; both columns are the same build. UD-Q4_K_XL's 71.7 GiB of
 experts do not fit: it runs from a pack with `experts.bin` (`iq_pack.py --experts-bin`) through `--mmap-experts`,
 reading from the NVMe (Crucial P3 Plus).
 
@@ -110,6 +122,7 @@ UD-IQ4_XS, one GPU, six-prompt geometric mean:
 | + the IQ4_XS AVX-2 multi-token kernel (Niko1221/Strata) | 78.0 (+1.3%) |
 | + the AVX2 gather of the IQ3_S grid (`STRATA_IQ256_GATHER=1`) | 80.9 (+4.9%) |
 | + `--adapt-decay 0.92` | 83.3 (+7.7%) |
+| + the later additions from upstream's PRs (#863, #851, #606/#838) | 83.6 (+8.2%) |
 
 In the agent sessions the same steps gave 75.0 -> 76.0 -> 77.8 (+3.7%). The gather is bit-exact (the parity tool's
 output is identical with and without it); the draft acceptance and the prefill did not change.
@@ -123,8 +136,8 @@ output is identical with and without it); the draft acceptance and the prefill d
 - **q8_1 blocks kept finite** (upstream #606, PR #838, at this fork's five quantizers): a massive activation could turn
   a block's fp16 scale or sum into inf, then NaN, and the model would answer one token forever. The same bits for
   every normal block, no speed cost.
-- **The AVX2 gather reorganized** (PR #863 by Hardin22): UD-IQ4_XS on the 3090 83.1 -> 83.7 tok/s, with both cards
-  107.2 -> 109.9 (one run). Its one-token IQ3_S path stays off on AMD, where ggml's dot is still slightly faster for
+- **The AVX2 gather reorganized** (PR #863 by Hardin22): UD-IQ4_XS on the 3090 83.1 -> 83.6 tok/s (five runs), with both cards
+  108.0 -> 109.4 (four runs). Its one-token IQ3_S path stays off on AMD, where ggml's dot is still slightly faster for
   one token (0.322 vs 0.334 ms per expert on the 5700X).
 - **An AVX2 Q8_K activation quantizer** (PR #851 by Hardin22): byte-identical to ggml's; no measurable change here.
 - **`--adapt-decay` outside (0, 1) refused** (PR #591). UD-Q4_K_XL is unchanged by all four.

@@ -52,7 +52,7 @@ En los dos: 200.192 tokens de contexto, caché KV int8, la capa de borrador MTP 
   (62 tokens, 600 de respuesta), `edit` (un script de 3.340 tokens devuelto editado, ~2.600), `proto5k` (un prompt
   de 5.296 tokens, 256 de respuesta). Los textos largos son notas privadas y no se publican.
 - Velocidad de generación = media geométrica de los seis; cada configuración es la media de todas las rondas de
-  este código y estos ajustes: 4 (UD-IQ4_XS, 1 GPU), 6 (UD-IQ4_XS, 2 GPU), 4 (UD-Q4_K_XL, 1 GPU), 3 (UD-Q4_K_XL, 2 GPU).
+  este código y estos ajustes: 5 (UD-IQ4_XS, 1 GPU), 4 (UD-IQ4_XS, 2 GPU), 6 (UD-Q4_K_XL, 1 GPU), 2 (UD-Q4_K_XL, 2 GPU).
 - Sesiones de agente: 18 turnos a través de `serve/server.py`, con la conversación creciendo hasta ~31K tokens
   (ficheros de código pegados, documentación, cambios de tema), 600 tokens por respuesta, tres rondas por variante.
 
@@ -62,36 +62,49 @@ Velocidad de generación (tokens/s):
 
 | Texto | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
 |---|---:|---:|---:|---:|
-| es_chat | 85,9 | 112,7 | 62,8 | 87,3 |
-| es_think | 88,5 | 111,0 | 74,8 | 80,4 |
-| es_doc (tras 18K) | 70,0 | 99,1 | 54,7 | 72,7 |
-| code | 87,4 | 119,5 | 67,6 | 84,1 |
-| edit | 113,8 | 161,6 | 87,9 | 117,7 |
-| proto5k (tras 5K) | 62,4 | 66,4 | 48,8 | 53,8 |
-| **Media geométrica** | **83,1** | **108,0** | **64,9** | **80,5** |
+| es_chat | 86,0 | 114,9 | 62,5 | 86,1 |
+| es_think | 87,7 | 113,2 | 69,8 | 81,6 |
+| es_doc (tras 18K) | 69,9 | 98,1 | 54,8 | 73,7 |
+| code | 88,5 | 118,7 | 68,1 | 84,6 |
+| edit | 114,8 | 165,2 | 87,9 | 118,1 |
+| proto5k (tras 5K) | 63,5 | 68,5 | 49,1 | 52,7 |
+| **Media geométrica** | **83,6** | **109,4** | **64,2** | **80,5** |
 
 Lectura del prompt (prefill, tokens/s):
 
 | Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
 |---|---:|---:|---:|---:|
-| 18.076 tokens | 1.800 | 1.813 | 1.699 | 1.730 |
-| 5.296 tokens | 1.131 | 1.463 | 869 | 1.067 |
-| 3.340 tokens | 811 | 1.030 | 638 | 758 |
+| 18.076 tokens | 1.787 | 1.800 | 1.702 | 1.716 |
+| 5.296 tokens | 1.131 | 1.461 | 869 | 1.066 |
+| 3.340 tokens | 811 | 1.036 | 637 | 765 |
 
-- La segunda gráfica suma **+30 %** a UD-IQ4_XS y **+24 %** a UD-Q4_K_XL: guarda ~14,5 GB más de expertos y calcula su
+- La segunda gráfica suma **+31 %** a UD-IQ4_XS y **+25 %** a UD-Q4_K_XL: guarda ~14,5 GB más de expertos y calcula su
   parte de cada capa mientras la CPU calcula la suya. Apenas cambia el prefill de 18K, limitado por el enlace x8 de la
   3090.
-- Aciertos de expertos en VRAM: 80,8 % / 89,1 % (UD-IQ4_XS, 1 / 2 GPU), 77,8 % / 83,4 % (UD-Q4_K_XL). Aceptación de
+- Aciertos de expertos en VRAM: 80,7 % / 89,2 % (UD-IQ4_XS, 1 / 2 GPU), 77,8 % / 83,3 % (UD-Q4_K_XL). Aceptación de
   los borradores ~89 %.
 - Sesiones de agente (una gráfica): UD-IQ4_XS 77,8 tok/s, UD-Q4_K_XL 59,7 tok/s.
-- Aquí UD-IQ4_XS es más rápido que UD-Q4_K_XL (+28 % con una gráfica, +34 % con dos): cada experto ocupa menos, así
+- Aquí UD-IQ4_XS es más rápido que UD-Q4_K_XL (+30 % con una gráfica, +36 % con dos): cada experto ocupa menos, así
   que caben más en VRAM, y sus kernels de CPU, limitados por cálculo, aprovechan los 7 workers. UD-Q4_K_XL es el
   cuantizado más grande de los dos.
+
+## Prompts largos
+
+Prompts de 32K a 200K tokens distintos (prosa, luego la documentación y el código de este repositorio), 128 tokens de respuesta,
+una ronda cada uno.
+
+| Prompt | Lectura (prefill tok/s) UD-IQ4_XS 1 / 2 GPU | UD-Q4_K_XL 1 / 2 GPU | Generación después: UD-IQ4_XS 1 / 2 GPU | UD-Q4_K_XL 1 / 2 GPU |
+|---|---:|---:|---:|---:|
+| 32.022 tokens | 13,4 s (2.382) / 13,7 s (2.342) | 13,7 s (2.337) / 14,1 s (2.270) | 67,0 / 92,1 | 51,8 / 83,3 |
+| 64.022 tokens | 26,6 s (2.410) / 26,3 s (2.437) | 27,0 s (2.368) / 27,1 s (2.359) | 87,0 / 96,8 | 64,3 / 93,3 |
+| 120.019 tokens | 50,9 s (2.360) / 49,2 s (2.439) | 51,7 s (2.321) / 51,0 s (2.354) | 61,5 / 98,9 | 47,4 / 68,3 |
+| 200.019 tokens | 89,5 s (2.234) / 84,6 s (2.365) | 91,8 s (2.178) / 88,8 s (2.252) | 54,9 / 97,6 | 45,8 / 68,2 |
 
 ## Con 64 GB de RAM
 
 El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB), caché de disco incluida, con un cgroup de
-systemd (`MemoryMax=60G`; toda la memoria del motor y los ficheros mapeados contaban en él). Los 71,7 GiB de expertos de
+systemd (`MemoryMax=60G`; toda la memoria del motor y los ficheros mapeados contaban en él). Medido antes de los
+añadidos posteriores de más abajo; las dos columnas son el mismo binario. Los 71,7 GiB de expertos de
 UD-Q4_K_XL no caben: va con un pack con `experts.bin` (`iq_pack.py --experts-bin`) y `--mmap-experts`, leyendo del NVMe
 (Crucial P3 Plus).
 
@@ -112,6 +125,7 @@ UD-IQ4_XS con una gráfica, media geométrica de los seis textos:
 | + el kernel IQ4_XS AVX-2 multi-token (Niko1221/Strata) | 78,0 (+1,3 %) |
 | + el gather AVX2 de la tabla de IQ3_S (`STRATA_IQ256_GATHER=1`) | 80,9 (+4,9 %) |
 | + `--adapt-decay 0.92` | 83,3 (+7,7 %) |
+| + los añadidos posteriores de PR del original (#863, #851, #606/#838) | 83,6 (+8,2 %) |
 
 En las sesiones de agente los mismos pasos dieron 75,0 -> 76,0 -> 77,8 (+3,7 %). El gather da exactamente los mismos
 números (la herramienta de paridad sale idéntica con y sin él); la aceptación y el prefill no cambiaron.
@@ -125,8 +139,8 @@ números (la herramienta de paridad sale idéntica con y sin él); la aceptació
 - **Bloques q8_1 siempre finitos** (#606 y PR #838 del original, en los cinco cuantizadores de este fork): una
   activación enorme podía convertir en infinito la escala o la suma fp16 de un bloque, luego en NaN, y el modelo se
   quedaba repitiendo un token. Los mismos bits en todo bloque normal, sin coste de velocidad.
-- **El gather AVX2 reorganizado** (PR #863 de Hardin22): UD-IQ4_XS con la 3090 83,1 -> 83,7 tok/s, con las dos
-  107,2 -> 109,9 (una ronda). Su camino de un solo token para IQ3_S sigue apagado en AMD, donde el dot de ggml aún es
+- **El gather AVX2 reorganizado** (PR #863 de Hardin22): UD-IQ4_XS con la 3090 83,1 -> 83,6 tok/s (cinco rondas), con las dos
+  108,0 -> 109,4 (cuatro rondas). Su camino de un solo token para IQ3_S sigue apagado en AMD, donde el dot de ggml aún es
   algo más rápido para un token (0,322 frente a 0,334 ms por experto en el 5700X).
 - **Un cuantizador AVX2 de activaciones Q8_K** (PR #851 de Hardin22): los mismos bytes que el de ggml; aquí no se nota.
 - **`--adapt-decay` fuera de (0, 1) rechazado** (PR #591). UD-Q4_K_XL no cambia con ninguno de los cuatro.

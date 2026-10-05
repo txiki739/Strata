@@ -1,6 +1,6 @@
 <h1 align="center">Strata on a Ryzen 7 5700X + RTX 3090 + RTX 5060 Ti</h1>
 
-<p align="center"><b>Qwen3.8-Flash-Next 125B (MoE) on a desktop PC: 83 tokens/s on one RTX 3090, 108 tokens/s with an RTX 5060 Ti beside it</b><br>
+<p align="center"><b>Qwen3.8-Flash-Next 125B (MoE) on a desktop PC: 84 tokens/s on one RTX 3090, 109 tokens/s with an RTX 5060 Ti beside it</b><br>
 unsloth UD-IQ4_XS and UD-Q4_K_XL · 128 GB DDR4 · Linux · <a href="README.es.md">en español</a></p>
 
 This is [eddoursul/Strata](https://github.com/eddoursul/Strata)'s `custom` branch, a fork of
@@ -10,13 +10,13 @@ The original Strata README (what Strata is, setup, every option) is in [STRATA-R
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/summary-dark.svg">
-  <img alt="Decode speed, six-prompt mean. UD-IQ4_XS: 83.1 tok/s on the RTX 3090, 108.0 with the RTX 5060 Ti. UD-Q4_K_XL: 64.9 and 80.5." src="docs/media/readme/summary-light.svg">
+  <img alt="Decode speed, six-prompt mean. UD-IQ4_XS: 83.6 tok/s on the RTX 3090, 109.4 with the RTX 5060 Ti. UD-Q4_K_XL: 64.2 and 80.5." src="docs/media/readme/summary-light.svg">
 </picture>
 
 | Decode, tokens/s | RTX 3090 | RTX 3090 + RTX 5060 Ti | with the second GPU |
 |---|---:|---:|---:|
-| UD-IQ4_XS | **83.1** | **108.0** | +30% |
-| UD-Q4_K_XL | **64.9** | **80.5** | +24% |
+| UD-IQ4_XS | **83.6** | **109.4** | +31% |
+| UD-Q4_K_XL | **64.2** | **80.5** | +25% |
 
 ## The machine
 
@@ -54,12 +54,12 @@ The RTX 5060 Ti holds ~14.5 GB more experts and computes its share of each layer
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 85.9/112.7, reasoning 88.5/111.0, after an 18K document 70.0/99.1, code 87.4/119.5, edit 113.8/161.6, after a 5K prompt 62.4/66.4." src="docs/media/readme/decode-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 86.0/114.9, reasoning 87.7/113.2, after an 18K document 69.9/98.1, code 88.5/118.7, edit 114.8/165.2, after a 5K prompt 63.5/68.5." src="docs/media/readme/decode-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 62.8/87.3, reasoning 74.8/80.4, after an 18K document 54.7/72.7, code 67.6/84.1, edit 87.9/117.7, after a 5K prompt 48.8/53.8." src="docs/media/readme/decode-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 62.5/86.1, reasoning 69.8/81.6, after an 18K document 54.8/73.7, code 68.1/84.6, edit 87.9/118.1, after a 5K prompt 49.1/52.7." src="docs/media/readme/decode-q4kxl-light.svg">
 </picture>
 
 Reading the prompt (prefill) gains from the second GPU on short prompts; an 18K prompt is bound by the 3090's x8 link
@@ -67,21 +67,22 @@ either way.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS prefill, RTX 3090 vs both cards: 18,076 tokens 1,800/1,813 tok/s, 5,296 tokens 1,131/1,463, 3,340 tokens 811/1,030." src="docs/media/readme/prefill-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS prefill, RTX 3090 vs both cards: 18,076 tokens 1,787/1,800 tok/s, 5,296 tokens 1,131/1,461, 3,340 tokens 811/1,036." src="docs/media/readme/prefill-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL prefill, RTX 3090 vs both cards: 18,076 tokens 1,699/1,730 tok/s, 5,296 tokens 869/1,067, 3,340 tokens 638/758." src="docs/media/readme/prefill-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL prefill, RTX 3090 vs both cards: 18,076 tokens 1,702/1,716 tok/s, 5,296 tokens 869/1,066, 3,340 tokens 637/765." src="docs/media/readme/prefill-q4kxl-light.svg">
 </picture>
 
-UD-IQ4_XS is the faster of the two here (+28% on one GPU, +34% on two): its experts are smaller, so more of them fit
+UD-IQ4_XS is the faster of the two here (+30% on one GPU, +36% on two): its experts are smaller, so more of them fit
 in VRAM (81% / 89% cache hits against 78% / 83%), and its compute-bound CPU kernels use all seven workers.
 UD-Q4_K_XL is the larger, higher-precision quant.
 
 ## With 64 GB of RAM
 
-The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a cgroup.
+The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a cgroup;
+measured before the later additions, both columns with the same build.
 UD-IQ4_XS still fits and runs at the same speed. UD-Q4_K_XL does not (71.7 GiB of experts): it reads them from the
 NVMe through `--mmap-experts` and loses more than half of its speed.
 
@@ -99,6 +100,26 @@ NVMe through `--mmap-experts` and loses more than half of its speed.
 
 With 64 GB, UD-IQ4_XS is the one to run; UD-Q4_K_XL needs a 96 GB PC or more (~81 GB for the engine plus the system).
 
+## Long prompts
+
+Prompts of 32K to 200K distinct tokens (prose, then this repo's docs and source code) with 128 tokens of answer.
+Reading the prompt stays at 2,200-2,440 tokens/s in all four configs up to the 200,192-token context: a 200K prompt
+takes 85-92 s before the first token. With the second GPU, UD-IQ4_XS keeps decoding at ~97 tok/s even at 200K.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-dark.svg">
+  <img alt="UD-IQ4_XS decode right after a long prompt, RTX 3090 vs both cards: 32K 67.0/92.1, 64K 87.0/96.8, 120K 61.5/98.9, 200K 54.9/97.6 tok/s." src="docs/media/readme/longctx-light.svg">
+</picture>
+
+| Prompt | Time to read it (all four configs) | Decode after: UD-IQ4_XS 1 / 2 GPUs | UD-Q4_K_XL 1 / 2 GPUs |
+|---|---:|---:|---:|
+| 32,022 tokens | 13-14 s | 67.0 / 92.1 | 51.8 / 83.3 |
+| 64,022 tokens | 26-27 s | 87.0 / 96.8 | 64.3 / 93.3 |
+| 120,019 tokens | 49-52 s | 61.5 / 98.9 | 47.4 / 68.3 |
+| 200,019 tokens | 85-92 s | 54.9 / 97.6 | 45.8 / 68.2 |
+
+The decode after a long prompt is from 128 tokens, so it moves more from run to run than the six-prompt means.
+
 ## Long agent sessions
 
 18 turns through `serve/server.py` as a coding agent would send them: pasted source files, docs, topic changes, the
@@ -109,7 +130,7 @@ conversation growing to ~31K tokens, 600 tokens per answer. On one GPU: **UD-IQ4
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/steps-dark.svg">
-  <img alt="UD-IQ4_XS on the RTX 3090: eddoursul custom + fixes 77.3, + IQ4_XS AVX-2 kernel 78.0, + AVX2 gather 80.9, + --adapt-decay 0.92 83.3 tok/s." src="docs/media/readme/steps-light.svg">
+  <img alt="UD-IQ4_XS on the RTX 3090: eddoursul custom + fixes 77.3, + IQ4_XS AVX-2 kernel 78.0, + AVX2 gather 80.9, + --adapt-decay 0.92 83.3, + upstream PRs #863/#851/#606 83.6 tok/s." src="docs/media/readme/steps-light.svg">
 </picture>
 
 - The **IQ4_XS AVX-2 multi-token kernel** (upstream #415): the one IQ4_XS layer no longer goes token by token.
@@ -138,8 +159,8 @@ core on Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); the engine exi
 - **q8_1 blocks kept finite** (upstream #606, PR #838, at this fork's five quantizers): a massive activation could turn
   a block's fp16 scale or sum into inf, then NaN, and the model would answer one token forever. The same bits for
   every normal block, no speed cost.
-- **The AVX2 gather reorganized** (PR #863 by Hardin22): UD-IQ4_XS on the 3090 83.1 -> 83.7 tok/s, with both cards
-  107.2 -> 109.9 (one run). Its one-token IQ3_S path stays off on AMD, where ggml's dot is still slightly faster for
+- **The AVX2 gather reorganized** (PR #863 by Hardin22): UD-IQ4_XS on the 3090 83.1 -> 83.6 tok/s (five runs), with both cards
+  108.0 -> 109.4 (four runs). Its one-token IQ3_S path stays off on AMD, where ggml's dot is still slightly faster for
   one token (0.322 vs 0.334 ms per expert on the 5700X).
 - **An AVX2 Q8_K activation quantizer** (PR #851 by Hardin22): byte-identical to ggml's; no measurable change here.
 - **`--adapt-decay` outside (0, 1) refused** (PR #591). UD-Q4_K_XL is unchanged by all four.
@@ -173,6 +194,6 @@ The four configs and the steps to build and run them on Linux: [examples/r7-5700
   18,076-token document to summarize (400), a coding task (600), a 3,340-token script returned edited (~2,600) and a
   5,296-token prompt (256). The long texts are private notes and are not published.
 - The engine driven through its own `--serve` protocol, prompt cache off, greedy, speculation on. Decode speed is the
-  geometric mean of the six prompts; each config is the mean of one to six runs (within 3% of each other, except one
-  dual run at -3%), interleaved with the baseline when comparing builds.
+  geometric mean of the six prompts; each config is the mean of two to six runs (within 3% of each other, except one
+  UD-Q4_K_XL run at -5%), interleaved with the baseline when comparing builds.
 - Full tables: [docs/MEASUREMENTS.md](docs/MEASUREMENTS.md).
