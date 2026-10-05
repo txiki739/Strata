@@ -118,6 +118,17 @@ output is identical with and without it); the draft acceptance and the prefill d
 0.99 71.6 · 1.0 57.1 (the cache stops following the text). With the second GPU 0.92 cancels the gather's gain and
 0.95 is -2%, and on UD-Q4_K_XL it gives nothing in the agent sessions, so those configs keep 0.7.
 
+### Later additions (from upstream's open pull requests)
+
+- **q8_1 blocks kept finite** (upstream #606, PR #838, at this fork's five quantizers): a massive activation could turn
+  a block's fp16 scale or sum into inf, then NaN, and the model would answer one token forever. The same bits for
+  every normal block, no speed cost.
+- **The AVX2 gather reorganized** (PR #863 by Hardin22): UD-IQ4_XS on the 3090 83.1 -> 83.7 tok/s, with both cards
+  107.2 -> 109.9 (one run). Its one-token IQ3_S path stays off on AMD, where ggml's dot is still slightly faster for
+  one token (0.322 vs 0.334 ms per expert on the 5700X).
+- **An AVX2 Q8_K activation quantizer** (PR #851 by Hardin22): byte-identical to ggml's; no measurable change here.
+- **`--adapt-decay` outside (0, 1) refused** (PR #591). UD-Q4_K_XL is unchanged by all four.
+
 Other settings tried on this machine without a gain: more pool workers than 7 (UD-IQ4_XS) or 4 (UD-Q4_K_XL),
 `--spec` 3/5/6, `--spec-min-p` 0.3/0.7, `--spec-lookup` 8/24, `--adapt-every 2`, `--adapt-swaps 192` on
 UD-Q4_K_XL, `--pcie-frac` above 0.3, the GPUs' stock power limits.

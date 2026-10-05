@@ -135,6 +135,17 @@ núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que
 ([#7](https://github.com/eddoursul/Strata/pull/7)); el vocabulario de borrador en español
 ([#8](https://github.com/eddoursul/Strata/pull/8)).
 
+### Añadidos posteriores (de pull requests abiertos del motor original)
+
+- **Bloques q8_1 siempre finitos** (#606 y PR #838 del original, en los cinco cuantizadores de este fork): una
+  activación enorme podía convertir en infinito la escala o la suma fp16 de un bloque, luego en NaN, y el modelo se
+  quedaba repitiendo un token. Los mismos bits en todo bloque normal, sin coste de velocidad.
+- **El gather AVX2 reorganizado** (PR #863 de Hardin22): UD-IQ4_XS con la 3090 83,1 -> 83,7 tok/s, con las dos
+  107,2 -> 109,9 (una ronda). Su camino de un solo token para IQ3_S sigue apagado en AMD, donde el dot de ggml aún es
+  algo más rápido para un token (0,322 frente a 0,334 ms por experto en el 5700X).
+- **Un cuantizador AVX2 de activaciones Q8_K** (PR #851 de Hardin22): los mismos bytes que el de ggml; aquí no se nota.
+- **`--adapt-decay` fuera de (0, 1) rechazado** (PR #591). UD-Q4_K_XL no cambia con ninguno de los cuatro.
+
 ## Workers de CPU
 
 <picture>

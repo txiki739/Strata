@@ -120,6 +120,17 @@ números (la herramienta de paridad sale idéntica con y sin él); la aceptació
 0,99 71,6 · 1,0 57,1 (la caché deja de seguir el texto). Con la segunda gráfica 0,92 anula la ganancia del gather y
 0,95 da -2 %, y en UD-Q4_K_XL no aporta en las sesiones de agente, así que esas configuraciones se quedan en 0,7.
 
+### Añadidos posteriores (de pull requests abiertos del motor original)
+
+- **Bloques q8_1 siempre finitos** (#606 y PR #838 del original, en los cinco cuantizadores de este fork): una
+  activación enorme podía convertir en infinito la escala o la suma fp16 de un bloque, luego en NaN, y el modelo se
+  quedaba repitiendo un token. Los mismos bits en todo bloque normal, sin coste de velocidad.
+- **El gather AVX2 reorganizado** (PR #863 de Hardin22): UD-IQ4_XS con la 3090 83,1 -> 83,7 tok/s, con las dos
+  107,2 -> 109,9 (una ronda). Su camino de un solo token para IQ3_S sigue apagado en AMD, donde el dot de ggml aún es
+  algo más rápido para un token (0,322 frente a 0,334 ms por experto en el 5700X).
+- **Un cuantizador AVX2 de activaciones Q8_K** (PR #851 de Hardin22): los mismos bytes que el de ggml; aquí no se nota.
+- **`--adapt-decay` fuera de (0, 1) rechazado** (PR #591). UD-Q4_K_XL no cambia con ninguno de los cuatro.
+
 Otros ajustes probados en este equipo sin ganancia: más workers que 7 (UD-IQ4_XS) o 4 (UD-Q4_K_XL), `--spec` 3/5/6,
 `--spec-min-p` 0,3/0,7, `--spec-lookup` 8/24, `--adapt-every 2`, `--adapt-swaps 192` en UD-Q4_K_XL,
 `--pcie-frac` por encima de 0,3 y las gráficas a su potencia de serie.
