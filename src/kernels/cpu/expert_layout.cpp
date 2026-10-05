@@ -3,6 +3,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <string>
 #if defined(_MSC_VER)
 #include <intrin.h>
 #include <immintrin.h>
@@ -18,6 +19,56 @@ ExpertLayout g_layout;
 }
 
 const ExpertLayout& expert_layout() { return g_layout; }
+
+// upstream (Niko1221/Strata e82947f): STRATA_FORCE_ISA and the AVX2 check PR #851's quantizer gates on
+int cpu_isa_cap() {
+    // STRATA_FORCE_ISA (tests, the experimental older-CPU builds): the engine's own dispatch acts as if this CPU
+    // stopped at that level.  ggml-cpu is not affected: it runs what the build compiled it for.
+    static const int cap = [] {
+        const char* f = std::getenv("STRATA_FORCE_ISA");
+        if (f == nullptr || f[0] == '\0') return 3;
+        const std::string v(f);
+        if (v == "avx2") return 2;
+        if (v == "avx") return 1;
+        if (v == "sse" || v == "sse4.2" || v == "none") return 0;
+        std::fprintf(stderr, "strata: STRATA_FORCE_ISA=%s is not avx2, avx or sse; ignored\n", f);
+        return 3;
+    }();
+    return cap;
+}
+
+bool cpu_avx2_ok() {
+    static const bool ok = [] {
+        if (cpu_isa_cap() < 2) return false;
+        unsigned r[4] = {0, 0, 0, 0};
+        auto cpuid = [&](unsigned leaf, unsigned sub) {
+#if defined(_MSC_VER)
+            int x[4];
+            __cpuidex(x, (int) leaf, (int) sub);
+            for (int i = 0; i < 4; ++i) r[i] = (unsigned) x[i];
+#else
+            __cpuid_count(leaf, sub, r[0], r[1], r[2], r[3]);
+#endif
+        };
+        cpuid(0, 0);
+        if (r[0] < 7) return false;
+        cpuid(1, 0);
+        const unsigned ecx1 = r[2];
+        // FMA (12), OSXSAVE (27), AVX (28), F16C (29)
+        if (!((ecx1 >> 12) & 1u) || !((ecx1 >> 27) & 1u) || !((ecx1 >> 28) & 1u) || !((ecx1 >> 29) & 1u)) return false;
+#if defined(_MSC_VER)
+        const unsigned long long xcr0 = _xgetbv(0);
+#else
+        unsigned lo = 0, hi = 0;
+        __asm__ volatile("xgetbv" : "=a"(lo), "=d"(hi) : "c"(0));
+        const unsigned long long xcr0 = ((unsigned long long) hi << 32) | lo;
+#endif
+        if ((xcr0 & 0x6) != 0x6) return false;            // the OS saves the SSE and AVX state
+        cpuid(7, 0);
+        return ((r[1] >> 5) & 1u) != 0;                    // AVX2
+    }();
+    return ok;
+}
 
 bool cpu_avx512_ok() {
     static const bool ok = [] {
