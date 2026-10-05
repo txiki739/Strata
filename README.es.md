@@ -110,8 +110,13 @@ de 200.192 tokens: un prompt de 200K tarda 85-92 s antes del primer token. Con l
 generando a ~97 tok/s incluso a 200K.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-dark.svg">
-  <img alt="UD-IQ4_XS generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 67,0/92,1, 64K 87,0/96,8, 120K 61,5/98,9, 200K 54,9/97,6 tok/s." src="docs/media/readme/longctx-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-iq4xs-dark.svg">
+  <img alt="UD-IQ4_XS generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 67,0/92,1, 64K 87,0/96,8, 120K 61,5/98,9, 200K 54,9/97,6 tok/s." src="docs/media/readme/longctx-iq4xs-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-q4kxl-dark.svg">
+  <img alt="UD-Q4_K_XL generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 51,8/83,3, 64K 64,3/93,3, 120K 47,4/68,3, 200K 45,8/68,2 tok/s." src="docs/media/readme/longctx-q4kxl-light.svg">
 </picture>
 
 | Prompt | Tiempo de lectura (las cuatro) | Generación después: UD-IQ4_XS 1 / 2 GPU | UD-Q4_K_XL 1 / 2 GPU |

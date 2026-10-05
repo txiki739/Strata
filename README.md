@@ -107,8 +107,13 @@ Reading the prompt stays at 2,200-2,440 tokens/s in all four configs up to the 2
 takes 85-92 s before the first token. With the second GPU, UD-IQ4_XS keeps decoding at ~97 tok/s even at 200K.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-dark.svg">
-  <img alt="UD-IQ4_XS decode right after a long prompt, RTX 3090 vs both cards: 32K 67.0/92.1, 64K 87.0/96.8, 120K 61.5/98.9, 200K 54.9/97.6 tok/s." src="docs/media/readme/longctx-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-iq4xs-dark.svg">
+  <img alt="UD-IQ4_XS decode right after a long prompt, RTX 3090 vs both cards: 32K 67.0/92.1, 64K 87.0/96.8, 120K 61.5/98.9, 200K 54.9/97.6 tok/s." src="docs/media/readme/longctx-iq4xs-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-q4kxl-dark.svg">
+  <img alt="UD-Q4_K_XL decode right after a long prompt, RTX 3090 vs both cards: 32K 51.8/83.3, 64K 64.3/93.3, 120K 47.4/68.3, 200K 45.8/68.2 tok/s." src="docs/media/readme/longctx-q4kxl-light.svg">
 </picture>
 
 | Prompt | Time to read it (all four configs) | Decode after: UD-IQ4_XS 1 / 2 GPUs | UD-Q4_K_XL 1 / 2 GPUs |

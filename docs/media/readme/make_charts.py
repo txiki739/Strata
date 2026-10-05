@@ -41,6 +41,7 @@ RAM64 = {"128": [83.1, 108.0, 64.9, 80.5],
          "64": [83.5, 107.5, 24.4, 37.1]}
 # decode right after a long prompt (128 tokens of answer), UD-IQ4_XS: one GPU / two
 LONG_CATS = ["after 32K tokens", "after 64K", "after 120K", "after 200K"]
+LONG_DEC_Q4 = {"one": [51.8, 64.3, 47.4, 45.8], "two": [83.3, 93.3, 68.3, 68.2]}
 LONG_DEC = {"one": [67.0, 87.0, 61.5, 54.9], "two": [92.1, 96.8, 98.9, 97.6]}
 WORKERS = {"UD-IQ4_XS": [(4, 65.6), (6, 74.1), (7, 76.6)], "UD-Q4_K_XL": [(4, 63.5), (5, 62.2), (6, 61.6), (7, 62.2)]}
 
@@ -76,9 +77,10 @@ def ticks(vmax):
     return 2000
 
 
-def grouped(name, cats, series, label, t, vmax=None, dec=1, lab_w=180, w=760):
-    """Horizontal grouped bars: one group per category, one bar per series (2 px gap inside a group)."""
-    bh, gap, ggap, top = 14, 2, 16, 34
+def grouped(name, cats, series, label, t, vmax=None, dec=1, lab_w=180, w=760, title=None):
+    """Horizontal grouped bars: one group per category, one bar per series (2 px gap inside a group); `title`, the
+    chart's own name above the legend, for the charts that differ only by model."""
+    bh, gap, ggap, top = 14, 2, 16, 34 + (24 if title else 0)
     n = len(series)
     gh = n * bh + (n - 1) * gap
     h = top + len(cats) * (gh + ggap) + 26
@@ -87,7 +89,8 @@ def grouped(name, cats, series, label, t, vmax=None, dec=1, lab_w=180, w=760):
     vmax = (int(vmax / step) + 1) * step
     pw = w - lab_w - 60
     X = lambda v: lab_w + v / vmax * pw
-    body = [legend([(k, s) for k, s, _ in series], t) if n > 1 else ""]
+    body = [f'<text x="0" y="16" font-size="15" font-weight="600" fill="{t["ink"]}">{title}</text>' if title else "",
+            legend([(k, s) for k, s, _ in series], t, y=38 if title else 14) if n > 1 else ""]
     for i in range(0, int(vmax) + 1, step):
         x = X(i)
         body.append(f'<line x1="{x:.1f}" y1="{top - 6}" x2="{x:.1f}" y2="{h - 22}" stroke="{t["grid"]}" stroke-width="1"/>')
@@ -142,14 +145,16 @@ def main():
                                [(k, s, [MEAN["iq4"][k], MEAN["q4"][k]]) for k, s in GPU],
                                "Decode speed, six-prompt mean: one GPU or two", t, lab_w=120),
             "decode-iq4xs": grouped("d", PROMPTS, [(k, s, DECODE["iq4"][k]) for k, s in GPU],
-                                    "UD-IQ4_XS decode speed per prompt", t),
+                                    "UD-IQ4_XS decode speed per prompt", t, title="UD-IQ4_XS · decode per prompt (tokens/s)"),
             "decode-q4kxl": grouped("d", PROMPTS, [(k, s, DECODE["q4"][k]) for k, s in GPU],
-                                    "UD-Q4_K_XL decode speed per prompt", t, vmax=max(DECODE["iq4"]["two"])),
+                                    "UD-Q4_K_XL decode speed per prompt", t, vmax=max(DECODE["iq4"]["two"]),
+                                    title="UD-Q4_K_XL · decode per prompt (tokens/s)"),
             "prefill-iq4xs": grouped("p", PREFILL_LABELS, [(k, s, PREFILL["iq4"][k]) for k, s in GPU],
-                                     "UD-IQ4_XS prompt reading speed", t, dec=0, lab_w=120),
+                                     "UD-IQ4_XS prompt reading speed", t, dec=0, lab_w=120,
+                                     title="UD-IQ4_XS · prompt reading (tokens/s)"),
             "prefill-q4kxl": grouped("p", PREFILL_LABELS, [(k, s, PREFILL["q4"][k]) for k, s in GPU],
                                      "UD-Q4_K_XL prompt reading speed", t, vmax=max(PREFILL["iq4"]["two"]), dec=0,
-                                     lab_w=120),
+                                     lab_w=120, title="UD-Q4_K_XL · prompt reading (tokens/s)"),
             "steps": grouped("s", [s for s, _ in STEPS], [("single", "", [v for _, v in STEPS])],
                              "UD-IQ4_XS on the RTX 3090: what each change gave", t, lab_w=250),
             "decay": line("decay", [("single", "", DECAY)], "UD-IQ4_XS on the RTX 3090: --adapt-decay", t,
@@ -159,8 +164,13 @@ def main():
                             "Decode speed by CPU pool workers, RTX 3090 alone", t, "CPU pool workers (one per physical core)",
                             [4, 5, 6, 7], 55, 80, 5, str),
         }
-        charts["longctx"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC[k]) for k, n in GPU],
-                                    "UD-IQ4_XS decode right after a long prompt", t, lab_w=150)
+        lmax = max(LONG_DEC["two"] + LONG_DEC_Q4["two"])
+        charts["longctx-iq4xs"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC[k]) for k, n in GPU],
+                                          "UD-IQ4_XS decode right after a long prompt", t, vmax=lmax, lab_w=150,
+                                          title="UD-IQ4_XS · decode right after a long prompt (tokens/s)")
+        charts["longctx-q4kxl"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC_Q4[k]) for k, n in GPU],
+                                          "UD-Q4_K_XL decode right after a long prompt", t, vmax=lmax, lab_w=150,
+                                          title="UD-Q4_K_XL · decode right after a long prompt (tokens/s)")
         if RAM64:
             charts["ram64"] = grouped("r", RAM_CATS, [("r128", "128 GB", RAM64["128"]), ("r64", "64 GB", RAM64["64"])],
                                       "Decode speed with 128 GB and with 64 GB of RAM", t, lab_w=210)
