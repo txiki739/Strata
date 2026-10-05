@@ -930,7 +930,14 @@ int main(int argc, char** argv) {
             o.stop_eos = true;
         }
         else if (a == "--adapt-swaps") o.adapt_swaps = std::atoi(next("--adapt-swaps"));
-        else if (a == "--adapt-decay") o.adapt_decay = (float) std::atof(next("--adapt-decay"));
+        else if (a == "--adapt-decay") {
+            o.adapt_decay = (float) std::atof(next("--adapt-decay"));
+            // at 1 or more the usage counts grow without end and the swap gains turn NaN (upstream PR #591)
+            if (!(o.adapt_decay > 0.0f && o.adapt_decay < 1.0f)) {
+                std::fprintf(stderr, "--adapt-decay must be between 0 and 1 (exclusive)\n");
+                return 2;
+            }
+        }
         else if (a == "--expert-cache-cpu-order") o.expert_cache_cpu_order = true;
         else if (a == "--expert-cache-per-layer") o.expert_cache_per_layer = true;
         else if (a == "--no-hit-poke") o.no_hit_poke = true;
