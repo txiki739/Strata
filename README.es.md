@@ -80,28 +80,6 @@ Aquí UD-IQ4_XS es el más rápido (+30 % con una gráfica, +36 % con dos): sus 
 en VRAM (81 % / 89 % de aciertos frente a 78 % / 83 %), y sus kernels de CPU, limitados por cálculo, aprovechan los
 siete workers. UD-Q4_K_XL es el cuantizado más grande y de más precisión.
 
-## Con 64 GB de RAM
-
-El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB), caché de disco incluida, con un cgroup;
-medido antes de los añadidos posteriores, las dos columnas con el mismo binario.
-UD-IQ4_XS sigue cabiendo y va igual de rápido. UD-Q4_K_XL no cabe (71,7 GiB de expertos): los lee del NVMe con
-`--mmap-experts` y pierde más de la mitad de la velocidad.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/ram64-dark.svg">
-  <img alt="Generación con 128 GB y con 64 GB de RAM: UD-IQ4_XS RTX 3090 83,1/83,5, UD-IQ4_XS con las dos 108,0/107,5, UD-Q4_K_XL RTX 3090 64,9/24,4, UD-Q4_K_XL con las dos 80,5/37,1." src="docs/media/readme/ram64-light.svg">
-</picture>
-
-| 64 GB de RAM | Generación | Prefill 18K / 5K / 3K | Aciertos de caché |
-|---|---:|---:|---:|
-| UD-IQ4_XS, RTX 3090 | 83,5 | 1.790 / 1.132 / 813 | 81 % |
-| UD-IQ4_XS, las dos | 107,5 | 1.804 / 1.460 / 1.033 | 89 % |
-| UD-Q4_K_XL, RTX 3090 | 24,4 | 432 / 154 / 133 | 54 % |
-| UD-Q4_K_XL, las dos | 37,1 | 532 / 195 / 155 | 78 % |
-
-Con 64 GB lo que hay que usar es UD-IQ4_XS; UD-Q4_K_XL necesita un PC de 96 GB o más (~81 GB para el motor más el
-sistema).
-
 ## Prompts largos
 
 Prompts de 32K a 200K tokens distintos (prosa, luego la documentación y el código de este repositorio) con 128 tokens
@@ -132,7 +110,70 @@ La generación tras un prompt largo sale de 128 tokens, así que varía más de 
 
 18 turnos a través de `serve/server.py`, como los mandaría un agente de programación: ficheros de código pegados,
 documentación, cambios de tema, la conversación creciendo hasta ~31K tokens y 600 tokens por respuesta. Con una gráfica:
-**UD-IQ4_XS 77,8 tok/s**, UD-Q4_K_XL 59,7 tok/s (tres y dos rondas).
+**UD-IQ4_XS 78,1 tok/s**, UD-Q4_K_XL 59,9 tok/s (tres y dos rondas; con 64 GB de RAM, más abajo).
+
+## Con 64 GB de RAM
+
+El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB) con un cgroup de systemd
+(`MemoryMax=60G`): la memoria del motor y la caché de disco de los ficheros del modelo que lee cuentan dentro. UD-IQ4_XS
+(55,4 GiB de expertos) sigue cabiendo, justo en el límite. UD-Q4_K_XL (71,7 GiB) no cabe: va con un pack con
+`experts.bin` (`iq_pack.py --experts-bin`) y `--mmap-experts`, y lee del NVMe los expertos que le faltan.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/ram64-dark.svg">
+  <img alt="Generación con 128 GB y con 64 GB de RAM: UD-IQ4_XS RTX 3090 83,6/81,5, con las dos 109,4/104,7; UD-Q4_K_XL RTX 3090 64,2/21,4, con las dos 80,5/25,2." src="docs/media/readme/ram64-light.svg">
+</picture>
+
+| Generación, tokens/s | 128 GB | 64 GB |
+|---|---:|---:|
+| UD-IQ4_XS, RTX 3090 | 83,6 | 81,5 (3 rondas: 79,4-82,7) |
+| UD-IQ4_XS, las dos | 109,4 | 104,7 (2 rondas: 101,9-107,5) |
+| UD-Q4_K_XL, RTX 3090 | 64,2 | 21,4 (2 rondas: 20,4-22,3) |
+| UD-Q4_K_XL, las dos | 80,5 | 25,2 (1 ronda) |
+
+- UD-IQ4_XS pierde un 2-4 %: el motor está en su techo de 60 GiB y el sistema relee parte de los ficheros del modelo,
+  lo que frena sobre todo la lectura de los prompts cortos (abajo).
+- UD-Q4_K_XL depende del NVMe (un Crucial P3 Plus) y varía mucho de una sesión a otra: una sesión anterior en este PC
+  dio 24,4 con la RTX 3090 y 37,1 con las dos.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-64-dark.svg">
+  <img alt="UD-IQ4_XS con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 83,2/95,5, razonamiento 87,5/106,9, tras un documento de 18K 67,8/98,0, código 85,3/119,5, edición 114,8/164,8, tras un prompt de 5K 61,0/68,0." src="docs/media/readme/decode-iq4xs-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-64-dark.svg">
+  <img alt="UD-Q4_K_XL con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 24,0/33,0, razonamiento 24,3/36,4, tras un documento de 18K 20,4/36,1, código 26,2/17,6, edición 32,7/65,0, tras un prompt de 5K 10,5/5,1." src="docs/media/readme/decode-q4kxl-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-64-dark.svg">
+  <img alt="UD-IQ4_XS con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 1.619/1.177 tok/s, 5.296 tokens 1.059/1.287, 3.340 tokens 676/1.038." src="docs/media/readme/prefill-iq4xs-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-64-dark.svg">
+  <img alt="UD-Q4_K_XL con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 300/521 tok/s, 5.296 tokens 106/188, 3.340 tokens 94/52." src="docs/media/readme/prefill-q4kxl-64-light.svg">
+</picture>
+
+
+Prompts largos con 64 GB (una ronda cada uno), tiempo de lectura del prompt y generación justo después:
+
+| Prompt | UD-IQ4_XS, RTX 3090 | UD-IQ4_XS, las dos | UD-Q4_K_XL, RTX 3090 | UD-Q4_K_XL, las dos |
+|---|---:|---:|---:|---:|
+| 32.022 tokens | 13,7 s · 59,5 | 13,6 s · 89,0 | 42,7 s · 17,8 | 44,1 s · 33,1 |
+| 64.022 tokens | 26,6 s · 75,9 | 26,2 s · 96,1 | 2,7 min · 22,9 | 1,7 min · 50,0 |
+| 120.019 tokens | 51,0 s · 61,0 | 49,0 s · 91,3 | 4,6 min · 2,7 | 72,1 s · 50,2 |
+| 200.019 tokens | 89,4 s · 57,1 | 84,3 s · 97,7 | 43,8 min · 6,0 | 2,0 min · 8,2 |
+
+- UD-IQ4_XS lee los prompts largos igual de rápido que con 128 GB y, con las dos gráficas, sigue generando a ~90-98 tok/s después.
+- UD-Q4_K_XL relee sus expertos del NVMe en cada bloque de 32K del prompt: uno de 200K tardó 43,8 min con una gráfica
+  y luego generó a 6,0 tok/s. Con 64 GB no sirve para contextos largos.
+
+Sesiones de agente con 64 GB (los mismos 18 turnos, dos rondas cada una): UD-IQ4_XS 76,0 tok/s (128 GB: 78,1),
+UD-Q4_K_XL 25,1 tok/s (128 GB: 59,9).
+
+Con 64 GB lo que hay que usar es UD-IQ4_XS; UD-Q4_K_XL necesita un PC de 96 GB o más (~81 GB para el motor más el sistema).
 
 ## Lo que han aportado los cambios sobre `custom` de eddoursul
 
@@ -149,11 +190,12 @@ documentación, cambios de tema, la conversación creciendo hasta ~31K tokens y 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decay-dark.svg">
-  <img alt="UD-IQ4_XS con la RTX 3090 según --adapt-decay: 0,70 80,9, 0,85 81,2, 0,92 82,4, 0,95 82,6, 0,97 81,1, 0,99 71,6, 1,00 57,1 tok/s." src="docs/media/readme/decay-light.svg">
+  <img alt="UD-IQ4_XS con la RTX 3090 según --adapt-decay: 0,7 76,8, 0,85 82,1, 0,92 83,6, 0,95 81,0, 0,97 81,3, 0,99 70,8 tok/s." src="docs/media/readme/decay-light.svg">
 </picture>
 
-Por encima de 0,97 la caché deja de seguir el texto. Con la segunda gráfica 0,92 anula la ganancia del gather, y en
-UD-Q4_K_XL no aporta en las sesiones de agente, así que esas configuraciones se quedan en 0,7.
+Dos rondas por valor con el motor actual (0,92: las rondas del README). A 0,99 la caché apenas sigue ya el texto, y
+el 1,0 ahora se rechaza (PR #591). Con la segunda gráfica 0,92 anulaba la ganancia del gather, y en UD-Q4_K_XL no
+aportaba en las sesiones de agente, así que esas configuraciones se quedan en 0,7.
 
 Los arreglos, propuestos a eddoursul/Strata: el arreglo del bloqueo con dos gráficas del #2, de FlareP1, y
 [una continuación](https://github.com/eddoursul/Strata/pull/2) para el congelamiento de la caché que provoca con 6 o
@@ -177,13 +219,13 @@ núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/workers-dark.svg">
-  <img alt="Generación según los workers de CPU con la RTX 3090 sola: UD-IQ4_XS 65,6 con 4, 74,1 con 6, 76,6 con 7; UD-Q4_K_XL 63,5 con 4, 62,2 con 5, 61,6 con 6, 62,2 con 7." src="docs/media/readme/workers-light.svg">
+  <img alt="Generación según los workers de CPU con la RTX 3090 sola: UD-IQ4_XS 73,8 con 4, 75,7 con 5, 81,8 con 6, 83,6 con 7; UD-Q4_K_XL 64,8 con 3, 64,2 con 4, 64,6 con 5, 63,7 con 6." src="docs/media/readme/workers-light.svg">
 </picture>
 
 Descomprimir los expertos de UD-IQ4_XS cuesta (búsquedas en tablas, ~5 GB/s por núcleo), así que cada núcleo suma hasta
 los siete que puede dar la CPU (uno es el hilo principal del motor). Los de UD-Q4_K_XL se descomprimen rápido y cuatro
-núcleos ya leen la RAM tan deprisa como da. Medido antes de lo portado del motor original y del afinado final; la forma
-es la misma.
+núcleos ya leen la RAM tan deprisa como da (de 3 a 6 da lo mismo). Dos rondas por punto con el motor actual; los
+puntos de los ajustes de producción (7 y 4 workers) son las rondas del README.
 
 ## Ajustes y cómo usarlo
 

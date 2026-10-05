@@ -79,27 +79,6 @@ UD-IQ4_XS is the faster of the two here (+30% on one GPU, +36% on two): its expe
 in VRAM (81% / 89% cache hits against 78% / 83%), and its compute-bound CPU kernels use all seven workers.
 UD-Q4_K_XL is the larger, higher-precision quant.
 
-## With 64 GB of RAM
-
-The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a cgroup;
-measured before the later additions, both columns with the same build.
-UD-IQ4_XS still fits and runs at the same speed. UD-Q4_K_XL does not (71.7 GiB of experts): it reads them from the
-NVMe through `--mmap-experts` and loses more than half of its speed.
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/ram64-dark.svg">
-  <img alt="Decode with 128 GB and with 64 GB of RAM: UD-IQ4_XS RTX 3090 83.1/83.5, UD-IQ4_XS both cards 108.0/107.5, UD-Q4_K_XL RTX 3090 64.9/24.4, UD-Q4_K_XL both cards 80.5/37.1." src="docs/media/readme/ram64-light.svg">
-</picture>
-
-| 64 GB of RAM | Decode | Prefill 18K / 5K / 3K | Cache hits |
-|---|---:|---:|---:|
-| UD-IQ4_XS, RTX 3090 | 83.5 | 1,790 / 1,132 / 813 | 81% |
-| UD-IQ4_XS, both cards | 107.5 | 1,804 / 1,460 / 1,033 | 89% |
-| UD-Q4_K_XL, RTX 3090 | 24.4 | 432 / 154 / 133 | 54% |
-| UD-Q4_K_XL, both cards | 37.1 | 532 / 195 / 155 | 78% |
-
-With 64 GB, UD-IQ4_XS is the one to run; UD-Q4_K_XL needs a 96 GB PC or more (~81 GB for the engine plus the system).
-
 ## Long prompts
 
 Prompts of 32K to 200K distinct tokens (prose, then this repo's docs and source code) with 128 tokens of answer.
@@ -128,8 +107,71 @@ The decode after a long prompt is from 128 tokens, so it moves more from run to 
 ## Long agent sessions
 
 18 turns through `serve/server.py` as a coding agent would send them: pasted source files, docs, topic changes, the
-conversation growing to ~31K tokens, 600 tokens per answer. On one GPU: **UD-IQ4_XS 77.8 tok/s**, UD-Q4_K_XL
-59.7 tok/s (three and two runs).
+conversation growing to ~31K tokens, 600 tokens per answer. On one GPU: **UD-IQ4_XS 78.1 tok/s**, UD-Q4_K_XL
+59.9 tok/s (three and two runs; with 64 GB of RAM, below).
+
+## With 64 GB of RAM
+
+The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free) by a systemd cgroup (`MemoryMax=60G`):
+the engine's memory and the file cache of the model files it reads all count against it. UD-IQ4_XS (55.4 GiB of
+experts) still fits, at the limit. UD-Q4_K_XL (71.7 GiB) does not: it runs from a pack with `experts.bin`
+(`iq_pack.py --experts-bin`) through `--mmap-experts` and reads the experts it lacks from the NVMe.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/ram64-dark.svg">
+  <img alt="Decode with 128 GB and with 64 GB of RAM: UD-IQ4_XS RTX 3090 83.6/81.5, both cards 109.4/104.7; UD-Q4_K_XL RTX 3090 64.2/21.4, both cards 80.5/25.2." src="docs/media/readme/ram64-light.svg">
+</picture>
+
+| Decode, tokens/s | 128 GB | 64 GB |
+|---|---:|---:|
+| UD-IQ4_XS, RTX 3090 | 83.6 | 81.5 (3 runs: 79.4-82.7) |
+| UD-IQ4_XS, both cards | 109.4 | 104.7 (2 runs: 101.9-107.5) |
+| UD-Q4_K_XL, RTX 3090 | 64.2 | 21.4 (2 runs: 20.4-22.3) |
+| UD-Q4_K_XL, both cards | 80.5 | 25.2 (1 run) |
+
+- UD-IQ4_XS loses 2-4%: the engine sits at its 60 GiB cap and the system re-reads part of the model files, which
+  slows short prompts' reading most (below).
+- UD-Q4_K_XL is bound by the NVMe (a Crucial P3 Plus) and varies a lot from session to session: an earlier session on
+  this PC gave 24.4 on the RTX 3090 and 37.1 with both cards.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-64-dark.svg">
+  <img alt="UD-IQ4_XS with 64 GB of RAM, decode per prompt, RTX 3090 vs both cards: Spanish chat 83.2/95.5, reasoning 87.5/106.9, after an 18K document 67.8/98.0, code 85.3/119.5, edit 114.8/164.8, after a 5K prompt 61.0/68.0." src="docs/media/readme/decode-iq4xs-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-64-dark.svg">
+  <img alt="UD-Q4_K_XL with 64 GB of RAM, decode per prompt, RTX 3090 vs both cards: Spanish chat 24.0/33.0, reasoning 24.3/36.4, after an 18K document 20.4/36.1, code 26.2/17.6, edit 32.7/65.0, after a 5K prompt 10.5/5.1." src="docs/media/readme/decode-q4kxl-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-64-dark.svg">
+  <img alt="UD-IQ4_XS with 64 GB of RAM, prefill, RTX 3090 vs both cards: 18,076 tokens 1,619/1,177 tok/s, 5,296 tokens 1,059/1,287, 3,340 tokens 676/1,038." src="docs/media/readme/prefill-iq4xs-64-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-64-dark.svg">
+  <img alt="UD-Q4_K_XL with 64 GB of RAM, prefill, RTX 3090 vs both cards: 18,076 tokens 300/521 tok/s, 5,296 tokens 106/188, 3,340 tokens 94/52." src="docs/media/readme/prefill-q4kxl-64-light.svg">
+</picture>
+
+
+Long prompts with 64 GB (one run each), time to read the prompt and decode right after it:
+
+| Prompt | UD-IQ4_XS, RTX 3090 | UD-IQ4_XS, both cards | UD-Q4_K_XL, RTX 3090 | UD-Q4_K_XL, both cards |
+|---|---:|---:|---:|---:|
+| 32,022 tokens | 13.7 s · 59.5 | 13.6 s · 89.0 | 42.7 s · 17.8 | 44.1 s · 33.1 |
+| 64,022 tokens | 26.6 s · 75.9 | 26.2 s · 96.1 | 2.7 min · 22.9 | 1.7 min · 50.0 |
+| 120,019 tokens | 51.0 s · 61.0 | 49.0 s · 91.3 | 4.6 min · 2.7 | 72.1 s · 50.2 |
+| 200,019 tokens | 89.4 s · 57.1 | 84.3 s · 97.7 | 43.8 min · 6.0 | 2.0 min · 8.2 |
+
+- UD-IQ4_XS reads long prompts as fast as with 128 GB, and with both cards still decodes at ~90-98 tok/s after them.
+- UD-Q4_K_XL re-reads its experts from the NVMe for every 32K chunk of a prompt: a 200K prompt took 43.8 min on one GPU
+  and then decoded at 6.0 tok/s. It is not usable with long contexts on 64 GB.
+
+Agent sessions with 64 GB (the same 18 turns, two runs each): UD-IQ4_XS 76.0 tok/s (128 GB: 78.1),
+UD-Q4_K_XL 25.1 tok/s (128 GB: 59.9).
+
+With 64 GB, UD-IQ4_XS is the one to run; UD-Q4_K_XL needs a 96 GB PC or more (~81 GB for the engine plus the system).
 
 ## What the changes on top of eddoursul's `custom` gave
 
@@ -146,11 +188,12 @@ conversation growing to ~31K tokens, 600 tokens per answer. On one GPU: **UD-IQ4
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decay-dark.svg">
-  <img alt="UD-IQ4_XS on the RTX 3090 by --adapt-decay: 0.70 80.9, 0.85 81.2, 0.92 82.4, 0.95 82.6, 0.97 81.1, 0.99 71.6, 1.00 57.1 tok/s." src="docs/media/readme/decay-light.svg">
+  <img alt="UD-IQ4_XS on the RTX 3090 by --adapt-decay: 0.70 76.8, 0.85 82.1, 0.92 83.6, 0.95 81.0, 0.97 81.3, 0.99 70.8 tok/s." src="docs/media/readme/decay-light.svg">
 </picture>
 
-Past 0.97 the cache stops following the text. With the second GPU 0.92 cancels the gather's gain, and on UD-Q4_K_XL
-it gives nothing in the agent sessions, so those configs keep 0.7.
+Two runs per value with the current engine (0.92: the README's runs). At 0.99 the cache barely follows the text any
+more, and 1.0 is now refused (PR #591). With the second GPU 0.92 cancelled the gather's gain, and on UD-Q4_K_XL it gave
+nothing in the agent sessions, so those configs keep 0.7.
 
 The fixes, proposed to eddoursul/Strata: the dual-GPU lockup fix of #2 by FlareP1 and
 [a follow-up](https://github.com/eddoursul/Strata/pull/2) for the cache freeze it causes with 6+ pool workers;
@@ -174,12 +217,13 @@ core on Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); the engine exi
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/workers-dark.svg">
-  <img alt="Decode by CPU pool workers on the RTX 3090 alone: UD-IQ4_XS 65.6 at 4, 74.1 at 6, 76.6 at 7; UD-Q4_K_XL 63.5 at 4, 62.2 at 5, 61.6 at 6, 62.2 at 7." src="docs/media/readme/workers-light.svg">
+  <img alt="Decode by CPU pool workers on the RTX 3090 alone: UD-IQ4_XS 73.8 at 4, 75.7 at 5, 81.8 at 6, 83.6 at 7; UD-Q4_K_XL 64.8 at 3, 64.2 at 4, 64.6 at 5, 63.7 at 6." src="docs/media/readme/workers-light.svg">
 </picture>
 
 UD-IQ4_XS's experts are expensive to decode (codebook lookups, ~5 GB/s per core), so every core helps up to all
 seven the CPU can give (one is the engine's host thread). UD-Q4_K_XL's are cheap to decode and four cores already
-read the RAM as fast as it goes. Measured before the upstream ports and the final tuning; the shape is the same.
+read the RAM as fast as it goes (3 to 6 give the same). Two runs per point with the current engine; the production
+settings' points (7 and 4 workers) are the README's runs.
 
 ## Settings and how to run
 

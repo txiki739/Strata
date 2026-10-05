@@ -82,7 +82,7 @@ Prompt reading (prefill, tokens/s):
   its share of each layer while the CPU computes its own). It barely changes the 18K prefill, which is bound by the
   3090's x8 link.
 - Expert VRAM hit rate: 80.7% / 89.2% (UD-IQ4_XS, 1 / 2 GPUs), 77.8% / 83.3% (UD-Q4_K_XL). Draft acceptance ~89%.
-- Agent sessions (one GPU): UD-IQ4_XS 77.8 tok/s, UD-Q4_K_XL 59.7 tok/s.
+- Agent sessions (one GPU): UD-IQ4_XS 78.1 tok/s, UD-Q4_K_XL 59.9 tok/s.
 - UD-IQ4_XS is faster than UD-Q4_K_XL here (+30% on one GPU, +36% on two): fewer bytes per expert, so more of them fit
   in VRAM, and its compute-bound CPU kernels use all 7 workers. UD-Q4_K_XL is the larger quant of the two.
 
@@ -99,18 +99,41 @@ Prompts of 32K to 200K distinct tokens (prose, then this repo's docs and source 
 
 ## With 64 GB of RAM
 
-The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free), its file cache included, by a systemd
-cgroup (`MemoryMax=60G`; the engine's memory and the mapped files were all charged to it). Measured before the
-later additions below; both columns are the same build. UD-Q4_K_XL's 71.7 GiB of
-experts do not fit: it runs from a pack with `experts.bin` (`iq_pack.py --experts-bin`) through `--mmap-experts`,
-reading from the NVMe (Crucial P3 Plus).
+The same PC with the engine limited to 60 GiB (what a 64 GB PC leaves free) by a systemd cgroup (`MemoryMax=60G`;
+the engine's memory and the file cache of the files it reads were all charged to it, and it reached the cap in every
+run). UD-Q4_K_XL's 71.7 GiB of experts do not fit: it runs from a pack with `experts.bin` (`iq_pack.py --experts-bin`)
+through `--mmap-experts`, reading from the NVMe (Crucial P3 Plus). Before each run the model files were dropped from
+the page cache. Runs: UD-IQ4_XS 3 (1 GPU) and 2 (2 GPUs), UD-Q4_K_XL 2 and 1.
 
-| 64 GB of RAM | Decode | Prefill 18K / 5K / 3K | Cache hits | With 128 GB |
+| Decode, tokens/s | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
 |---|---:|---:|---:|---:|
-| UD-IQ4_XS, 1 GPU | 83.5 | 1,790 / 1,132 / 813 | 81% | 83.1 |
-| UD-IQ4_XS, 2 GPUs | 107.5 | 1,804 / 1,460 / 1,033 | 89% | 108.0 |
-| UD-Q4_K_XL, 1 GPU (2 runs) | 24.4 | 432 / 154 / 133 | 54% | 64.9 |
-| UD-Q4_K_XL, 2 GPUs | 37.1 | 532 / 195 / 155 | 78% | 80.5 |
+| Spanish chat | 83.2 | 95.5 | 24.0 | 33.0 |
+| Reasoning | 87.5 | 106.9 | 24.3 | 36.4 |
+| After an 18K document | 67.8 | 98.0 | 20.4 | 36.1 |
+| Code | 85.3 | 119.5 | 26.2 | 17.6 |
+| Edit | 114.8 | 164.8 | 32.7 | 65.0 |
+| After a 5K prompt | 61.0 | 68.0 | 10.5 | 5.1 |
+| **Geometric mean** | **81.5** | **104.7** | **21.4** | **25.2** |
+| **Geometric mean** (128 GB) | 83.6 | 109.4 | 64.2 | 80.5 |
+
+| Prefill, tokens/s | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
+|---|---:|---:|---:|---:|
+| 18,076 tokens | 1,619 | 1,177 | 300 | 521 |
+| 5,296 tokens | 1,059 | 1,287 | 106 | 188 |
+| 3,340 tokens | 676 | 1,038 | 94 | 52 |
+
+Long prompts with 64 GB (one run each): time to read the prompt · decode right after it.
+
+| Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPUs | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPUs |
+|---|---:|---:|---:|---:|
+| 32,022 tokens | 13.7 s · 59.5 | 13.6 s · 89.0 | 42.7 s · 17.8 | 44.1 s · 33.1 |
+| 64,022 tokens | 26.6 s · 75.9 | 26.2 s · 96.1 | 2.7 min · 22.9 | 1.7 min · 50.0 |
+| 120,019 tokens | 51.0 s · 61.0 | 49.0 s · 91.3 | 4.6 min · 2.7 | 72.1 s · 50.2 |
+| 200,019 tokens | 89.4 s · 57.1 | 84.3 s · 97.7 | 43.8 min · 6.0 | 2.0 min · 8.2 |
+
+Agent sessions with 64 GB (two runs each): UD-IQ4_XS 76.0 tok/s (128 GB: 78.1), UD-Q4_K_XL
+25.1 (128 GB: 59.9).
+UD-Q4_K_XL from the NVMe varies a lot between sessions: an earlier one on this PC gave 24.4 (1 GPU) and 37.1 (2 GPUs).
 
 ## What the changes on top of eddoursul's `custom` gave
 
@@ -127,8 +150,8 @@ UD-IQ4_XS, one GPU, six-prompt geometric mean:
 In the agent sessions the same steps gave 75.0 -> 76.0 -> 77.8 (+3.7%). The gather is bit-exact (the parity tool's
 output is identical with and without it); the draft acceptance and the prefill did not change.
 
-`--adapt-decay` on UD-IQ4_XS (one GPU, with the gather): 0.85 81.2 · 0.92 82.4 · 0.95 82.6 · 0.97 81.1 ·
-0.99 71.6 · 1.0 57.1 (the cache stops following the text). With the second GPU 0.92 cancels the gather's gain and
+`--adapt-decay` on UD-IQ4_XS (one GPU, with the gather; two runs each, the current engine): 0.70 76.8 · 0.85 82.1 · 0.92 83.6 · 0.95 81.0 · 0.97 81.3 · 0.99 70.8
+(1.0 is refused since PR #591). With the second GPU 0.92 cancels the gather's gain and
 0.95 is -2%, and on UD-Q4_K_XL it gives nothing in the agent sessions, so those configs keep 0.7.
 
 ### Later additions (from upstream's open pull requests)

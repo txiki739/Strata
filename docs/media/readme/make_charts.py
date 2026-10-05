@@ -33,17 +33,19 @@ PREFILL = {"iq4": {"one": [1787, 1131, 811], "two": [1800, 1461, 1036]},
 STEPS = [("eddoursul custom + fixes", 77.3), ("+ IQ4_XS AVX-2 kernel", 78.0), ("+ AVX2 gather (IQ3_S)", 80.9),
          ("+ --adapt-decay 0.92", 83.3),
          ("+ upstream PRs #863, #851, #606", 83.6)]
-DECAY = [(0.70, 80.9), (0.85, 81.2), (0.92, 82.4), (0.95, 82.6), (0.97, 81.1), (0.99, 71.6), (1.00, 57.1)]
-# 64 GB PC emulated on the same machine (measured before the later additions, both columns with the same build): the engine (and its page cache) limited to 60 GiB with a cgroup; UD-Q4_K_XL
+DECAY = [(0.7, 76.8), (0.85, 82.1), (0.92, 83.6), (0.95, 81.0), (0.97, 81.3), (0.99, 70.8)]
+# 64 GB PC emulated on the same machine (the current engine; the 128 GB column is the README's runs): the engine (and its page cache) limited to 60 GiB with a cgroup; UD-Q4_K_XL
 # (71.7 GiB of experts) then reads its experts from the NVMe through --mmap-experts.  None until measured.
 RAM_CATS = ["UD-IQ4_XS · RTX 3090", "UD-IQ4_XS · 3090 + 5060 Ti", "UD-Q4_K_XL · RTX 3090", "UD-Q4_K_XL · 3090 + 5060 Ti"]
-RAM64 = {"128": [83.1, 108.0, 64.9, 80.5],
-         "64": [83.5, 107.5, 24.4, 37.1]}
+RAM64 = {"128": [83.6, 109.4, 64.2, 80.5],
+         "64": [81.5, 104.7, 21.4, 25.2]}
+DECODE64 = {"iq4": {"one": [83.2, 87.5, 67.8, 85.3, 114.8, 61.0], "two": [95.5, 106.9, 98.0, 119.5, 164.8, 68.0]}, "q4": {"one": [24.0, 24.3, 20.4, 26.2, 32.7, 10.5], "two": [33.0, 36.4, 36.1, 17.6, 65.0, 5.1]}}
+PREFILL64 = {"iq4": {"one": [1619, 1059, 676], "two": [1177, 1287, 1038]}, "q4": {"one": [300, 106, 94], "two": [521, 188, 52]}}
 # decode right after a long prompt (128 tokens of answer), UD-IQ4_XS: one GPU / two
 LONG_CATS = ["after 32K tokens", "after 64K", "after 120K", "after 200K"]
 LONG_DEC_Q4 = {"one": [51.8, 64.3, 47.4, 45.8], "two": [83.3, 93.3, 68.3, 68.2]}
 LONG_DEC = {"one": [67.0, 87.0, 61.5, 54.9], "two": [92.1, 96.8, 98.9, 97.6]}
-WORKERS = {"UD-IQ4_XS": [(4, 65.6), (6, 74.1), (7, 76.6)], "UD-Q4_K_XL": [(4, 63.5), (5, 62.2), (6, 61.6), (7, 62.2)]}
+WORKERS = {"UD-IQ4_XS": [(4, 73.8), (5, 75.7), (6, 81.8), (7, 83.6)], "UD-Q4_K_XL": [(3, 64.8), (4, 64.2), (5, 64.6), (6, 63.7)]}
 
 
 def num(v, d=1):
@@ -159,10 +161,10 @@ def main():
                              "UD-IQ4_XS on the RTX 3090: what each change gave", t, lab_w=250),
             "decay": line("decay", [("single", "", DECAY)], "UD-IQ4_XS on the RTX 3090: --adapt-decay", t,
                           "--adapt-decay (the share of the routing counts kept after each cache update)",
-                          [x for x, _ in DECAY], 50, 90, 10, lambda x: f"{x:.2f}", mark=(0.92, 82.4, "0.92 (used)"), ordinal=True),
+                          [x for x, _ in DECAY], 60, 90, 10, lambda x: f"{x:.2f}", mark=(0.92, 83.6, "0.92 (used)"), ordinal=True),
             "workers": line("workers", [("m1", "UD-IQ4_XS", WORKERS["UD-IQ4_XS"]), ("m2", "UD-Q4_K_XL", WORKERS["UD-Q4_K_XL"])],
                             "Decode speed by CPU pool workers, RTX 3090 alone", t, "CPU pool workers (one per physical core)",
-                            [4, 5, 6, 7], 55, 80, 5, str),
+                            [3, 4, 5, 6, 7], 55, 90, 5, str),
         }
         lmax = max(LONG_DEC["two"] + LONG_DEC_Q4["two"])
         charts["longctx-iq4xs"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC[k]) for k, n in GPU],
@@ -171,6 +173,13 @@ def main():
         charts["longctx-q4kxl"] = grouped("l", LONG_CATS, [(k, n, LONG_DEC_Q4[k]) for k, n in GPU],
                                           "UD-Q4_K_XL decode right after a long prompt", t, vmax=lmax, lab_w=150,
                                           title="UD-Q4_K_XL · decode right after a long prompt (tokens/s)")
+        for m, nm in (("iq4", "UD-IQ4_XS"), ("q4", "UD-Q4_K_XL")):
+            charts[f"decode-{'iq4xs' if m == 'iq4' else 'q4kxl'}-64"] = grouped(
+                "d", PROMPTS, [(k, s, DECODE64[m][k]) for k, s in GPU], f"{nm} decode per prompt with 64 GB of RAM", t,
+                vmax=max(DECODE["iq4"]["two"]), title=f"{nm} · decode per prompt, 64 GB of RAM (tokens/s)")
+            charts[f"prefill-{'iq4xs' if m == 'iq4' else 'q4kxl'}-64"] = grouped(
+                "p", PREFILL_LABELS, [(k, s, PREFILL64[m][k]) for k, s in GPU], f"{nm} prompt reading with 64 GB of RAM", t,
+                vmax=max(PREFILL["iq4"]["two"]), dec=0, lab_w=120, title=f"{nm} · prompt reading, 64 GB of RAM (tokens/s)")
         if RAM64:
             charts["ram64"] = grouped("r", RAM_CATS, [("r128", "128 GB", RAM64["128"]), ("r64", "64 GB", RAM64["64"])],
                                       "Decode speed with 128 GB and with 64 GB of RAM", t, lab_w=210)

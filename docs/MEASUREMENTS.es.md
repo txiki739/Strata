@@ -83,7 +83,7 @@ Lectura del prompt (prefill, tokens/s):
   3090.
 - Aciertos de expertos en VRAM: 80,7 % / 89,2 % (UD-IQ4_XS, 1 / 2 GPU), 77,8 % / 83,3 % (UD-Q4_K_XL). Aceptación de
   los borradores ~89 %.
-- Sesiones de agente (una gráfica): UD-IQ4_XS 77,8 tok/s, UD-Q4_K_XL 59,7 tok/s.
+- Sesiones de agente (una gráfica): UD-IQ4_XS 78,1 tok/s, UD-Q4_K_XL 59,9 tok/s.
 - Aquí UD-IQ4_XS es más rápido que UD-Q4_K_XL (+30 % con una gráfica, +36 % con dos): cada experto ocupa menos, así
   que caben más en VRAM, y sus kernels de CPU, limitados por cálculo, aprovechan los 7 workers. UD-Q4_K_XL es el
   cuantizado más grande de los dos.
@@ -102,18 +102,41 @@ una ronda cada uno.
 
 ## Con 64 GB de RAM
 
-El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB), caché de disco incluida, con un cgroup de
-systemd (`MemoryMax=60G`; toda la memoria del motor y los ficheros mapeados contaban en él). Medido antes de los
-añadidos posteriores de más abajo; las dos columnas son el mismo binario. Los 71,7 GiB de expertos de
-UD-Q4_K_XL no caben: va con un pack con `experts.bin` (`iq_pack.py --experts-bin`) y `--mmap-experts`, leyendo del NVMe
-(Crucial P3 Plus).
+El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB) con un cgroup de systemd (`MemoryMax=60G`;
+la memoria del motor y la caché de disco de los ficheros que lee contaban en él, y llegó al techo en todas las rondas).
+Los 71,7 GiB de expertos de UD-Q4_K_XL no caben: va con un pack con `experts.bin` (`iq_pack.py --experts-bin`) y
+`--mmap-experts`, leyendo del NVMe (Crucial P3 Plus). Antes de cada ronda se vaciaba la caché de los ficheros del modelo.
+Rondas: UD-IQ4_XS 3 (1 GPU) y 2 (2 GPU), UD-Q4_K_XL 2 y 1.
 
-| 64 GB de RAM | Generación | Prefill 18K / 5K / 3K | Aciertos de caché | Con 128 GB |
+| Generación, tokens/s | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
 |---|---:|---:|---:|---:|
-| UD-IQ4_XS, 1 GPU | 83,5 | 1.790 / 1.132 / 813 | 81 % | 83,1 |
-| UD-IQ4_XS, 2 GPU | 107,5 | 1.804 / 1.460 / 1.033 | 89 % | 108,0 |
-| UD-Q4_K_XL, 1 GPU (2 rondas) | 24,4 | 432 / 154 / 133 | 54 % | 64,9 |
-| UD-Q4_K_XL, 2 GPU | 37,1 | 532 / 195 / 155 | 78 % | 80,5 |
+| Chat en español | 83,2 | 95,5 | 24,0 | 33,0 |
+| Razonamiento | 87,5 | 106,9 | 24,3 | 36,4 |
+| Tras un documento de 18K | 67,8 | 98,0 | 20,4 | 36,1 |
+| Código | 85,3 | 119,5 | 26,2 | 17,6 |
+| Edición | 114,8 | 164,8 | 32,7 | 65,0 |
+| Tras un prompt de 5K | 61,0 | 68,0 | 10,5 | 5,1 |
+| **Media geométrica** | **81,5** | **104,7** | **21,4** | **25,2** |
+| **Media geométrica** (128 GB) | 83,6 | 109,4 | 64,2 | 80,5 |
+
+| Prefill, tokens/s | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
+|---|---:|---:|---:|---:|
+| 18.076 tokens | 1.619 | 1.177 | 300 | 521 |
+| 5.296 tokens | 1.059 | 1.287 | 106 | 188 |
+| 3.340 tokens | 676 | 1.038 | 94 | 52 |
+
+Prompts largos con 64 GB (una ronda cada uno): tiempo de lectura del prompt · generación justo después.
+
+| Prompt | UD-IQ4_XS 1 GPU | UD-IQ4_XS 2 GPU | UD-Q4_K_XL 1 GPU | UD-Q4_K_XL 2 GPU |
+|---|---:|---:|---:|---:|
+| 32.022 tokens | 13,7 s · 59,5 | 13,6 s · 89,0 | 42,7 s · 17,8 | 44,1 s · 33,1 |
+| 64.022 tokens | 26,6 s · 75,9 | 26,2 s · 96,1 | 2,7 min · 22,9 | 1,7 min · 50,0 |
+| 120.019 tokens | 51,0 s · 61,0 | 49,0 s · 91,3 | 4,6 min · 2,7 | 72,1 s · 50,2 |
+| 200.019 tokens | 89,4 s · 57,1 | 84,3 s · 97,7 | 43,8 min · 6,0 | 2,0 min · 8,2 |
+
+Sesiones de agente con 64 GB (dos rondas cada una): UD-IQ4_XS 76,0 tok/s (128 GB: 78,1), UD-Q4_K_XL
+25,1 (128 GB: 59,9).
+UD-Q4_K_XL desde el NVMe varía mucho entre sesiones: una anterior en este PC dio 24,4 (1 GPU) y 37,1 (2 GPU).
 
 ## Lo que han aportado los cambios sobre `custom` de eddoursul
 
@@ -130,8 +153,8 @@ UD-IQ4_XS con una gráfica, media geométrica de los seis textos:
 En las sesiones de agente los mismos pasos dieron 75,0 -> 76,0 -> 77,8 (+3,7 %). El gather da exactamente los mismos
 números (la herramienta de paridad sale idéntica con y sin él); la aceptación y el prefill no cambiaron.
 
-`--adapt-decay` en UD-IQ4_XS (una gráfica, con el gather): 0,85 81,2 · 0,92 82,4 · 0,95 82,6 · 0,97 81,1 ·
-0,99 71,6 · 1,0 57,1 (la caché deja de seguir el texto). Con la segunda gráfica 0,92 anula la ganancia del gather y
+`--adapt-decay` en UD-IQ4_XS (una gráfica, con el gather; dos rondas cada uno, el motor actual): 0,7 76,8 · 0,85 82,1 · 0,92 83,6 · 0,95 81,0 · 0,97 81,3 · 0,99 70,8
+(el 1,0 se rechaza desde el PR #591). Con la segunda gráfica 0,92 anula la ganancia del gather y
 0,95 da -2 %, y en UD-Q4_K_XL no aporta en las sesiones de agente, así que esas configuraciones se quedan en 0,7.
 
 ### Añadidos posteriores (de pull requests abiertos del motor original)

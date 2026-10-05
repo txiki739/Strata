@@ -20,22 +20,22 @@
 <line x1="700.0" y1="28" x2="700.0" y2="222" stroke="#3d444d" stroke-width="1"/>
 <text x="700.0" y="238" font-size="11" fill="#9198a1" text-anchor="middle">120</text>
 <text x="200" y="53.5" font-size="13" fill="#f0f6fc" text-anchor="end">UD-IQ4_XS · RTX 3090</text>
-<path d="M210.0,34.0 h335.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-335.3 z" fill="#9085e9"/>
-<text x="555.3" y="45" font-size="12" fill="#9198a1">83.1</text>
-<path d="M210.0,50.0 h337.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-337.0 z" fill="#c98500"/>
-<text x="557.0" y="61" font-size="12" fill="#9198a1">83.5</text>
+<path d="M210.0,34.0 h337.4 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-337.4 z" fill="#9085e9"/>
+<text x="557.4" y="45" font-size="12" fill="#9198a1">83.6</text>
+<path d="M210.0,50.0 h328.8 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-328.8 z" fill="#c98500"/>
+<text x="548.8" y="61" font-size="12" fill="#9198a1">81.5</text>
 <text x="200" y="99.5" font-size="13" fill="#f0f6fc" text-anchor="end">UD-IQ4_XS · 3090 + 5060 Ti</text>
-<path d="M210.0,80.0 h437.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-437.0 z" fill="#9085e9"/>
-<text x="657.0" y="91" font-size="12" fill="#9198a1">108.0</text>
-<path d="M210.0,96.0 h435.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-435.0 z" fill="#c98500"/>
-<text x="655.0" y="107" font-size="12" fill="#9198a1">107.5</text>
+<path d="M210.0,80.0 h442.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-442.7 z" fill="#9085e9"/>
+<text x="662.7" y="91" font-size="12" fill="#9198a1">109.4</text>
+<path d="M210.0,96.0 h423.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-423.5 z" fill="#c98500"/>
+<text x="643.5" y="107" font-size="12" fill="#9198a1">104.7</text>
 <text x="200" y="145.5" font-size="13" fill="#f0f6fc" text-anchor="end">UD-Q4_K_XL · RTX 3090</text>
-<path d="M210.0,126.0 h261.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-261.0 z" fill="#9085e9"/>
-<text x="481.0" y="137" font-size="12" fill="#9198a1">64.9</text>
-<path d="M210.0,142.0 h95.6 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-95.6 z" fill="#c98500"/>
-<text x="315.6" y="153" font-size="12" fill="#9198a1">24.4</text>
+<path d="M210.0,126.0 h258.2 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-258.2 z" fill="#9085e9"/>
+<text x="478.2" y="137" font-size="12" fill="#9198a1">64.2</text>
+<path d="M210.0,142.0 h83.4 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-83.4 z" fill="#c98500"/>
+<text x="303.4" y="153" font-size="12" fill="#9198a1">21.4</text>
 <text x="200" y="191.5" font-size="13" fill="#f0f6fc" text-anchor="end">UD-Q4_K_XL · 3090 + 5060 Ti</text>
 <path d="M210.0,172.0 h324.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-324.7 z" fill="#9085e9"/>
 <text x="544.7" y="183" font-size="12" fill="#9198a1">80.5</text>
-<path d="M210.0,188.0 h147.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-147.5 z" fill="#c98500"/>
-<text x="367.5" y="199" font-size="12" fill="#9198a1">37.1</text></svg>
+<path d="M210.0,188.0 h98.9 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-98.9 z" fill="#c98500"/>
+<text x="318.9" y="199" font-size="12" fill="#9198a1">25.2</text></svg>
