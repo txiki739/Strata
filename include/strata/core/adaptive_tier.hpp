@@ -34,6 +34,12 @@ public:
     bool on() const { return res_ != nullptr; }
     /// An empty slot sized for `layer`'s experts.
     void add_free(int64_t layer, int32_t slot) { free_[(size_t) layer].push_back(slot); }
+    /// The elastic K/V (--kv-grow) took the slots [lo, hi): no move may target them, empty or not.
+    void drop_free_slots(int64_t lo, int64_t hi) {
+        for (auto& f : free_)
+            for (size_t i = 0; i < f.size();)
+                if (f[i] >= lo && f[i] < hi) { f[i] = f.back(); f.pop_back(); } else ++i;
+    }
     int64_t free_slots() const;
     /// A tier in front of this one: the experts it holds or is loading are not candidates here, and this tier's
     /// copies of them are evicted first.

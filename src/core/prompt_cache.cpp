@@ -130,6 +130,7 @@ bool PromptCache::kv_copy(const std::vector<Part>& parts, uint8_t* host, bool to
 void PromptCache::stash_live(int64_t keep_upto) {
     const int64_t L = (int64_t) live_.tokens.size();
     if (stash_budget_ == 0 || L < kStashMin) return;
+    if (ensure_kv && !ensure_kv(L)) return;
     const std::vector<Part> parts = kv_parts(L);
     uint64_t bytes = 0;
     for (const Part& p : parts) bytes += p.bytes;
@@ -166,6 +167,7 @@ void PromptCache::stash_live(int64_t keep_upto) {
 bool PromptCache::restore(Seq& seq, int64_t pos) {
     Ckpt* ck = find(seq, pos);
     if (ck == nullptr) return false;
+    if (seq.kv && ensure_kv && !ensure_kv(seq.kv_cells)) return false;
     if (seq.kv && !kv_copy(kv_parts(seq.kv_cells), seq.kv.get(), false)) return false;
     ck->stamp = ++clock_;
     return session_ckpt_load(ss_, g_, pos, ck->host, stream_);

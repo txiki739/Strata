@@ -28,8 +28,11 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
+
+#include "strata/core/vmm.hpp"
 
 namespace strata::core {
 
@@ -72,6 +75,14 @@ public:
     bool open_sized(const std::vector<int64_t>& slot_bytes, int64_t n_layers, int64_t n_expert, std::string& err);
     /// Byte offset of each slot in the arena (null for uniform slots).
     const uint64_t* slot_offsets() const { return off_.empty() ? nullptr : off_.data(); }
+    /// Byte offset of slot `s` in the arena (s == slots(): the end).
+    uint64_t slot_offset(int64_t s) const { return off_.empty() ? (uint64_t) s * (uint64_t) blob_ : off_[(size_t) s]; }
+    /// The elastic K/V (--kv-grow, after Niko1221/Strata 0.1.40): the arena in a VMM range (vmm.hpp) instead of one
+    /// cudaMalloc, so the K/V can take whole chunks of it and give them back.  Applies to the next `open`; ignored
+    /// where VMM is not available.
+    static void set_vmm(bool enabled);
+    /// The arena's range (null: one cudaMalloc).
+    VmmRange* vmm_range() { return vmm_.get(); }
     void close();
 
     bool valid() const { return base_ != nullptr; }
@@ -147,6 +158,7 @@ private:
     std::size_t blocking_staging_bytes_ = 0;
 #endif
     uint8_t* base_ = nullptr;
+    std::unique_ptr<VmmRange> vmm_;    ///< the arena's range when it is in VMM (set_vmm)
     std::vector<int32_t> residency_;   ///< [n_layers * n_expert] -> slot or kNotResident
     int64_t slots_ = 0;
     int64_t n_layers_ = 0;

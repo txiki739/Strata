@@ -35,6 +35,10 @@
 #include <cstdio>
 #include <cstring>
 #include <vector>
+#include <algorithm>
+#include <functional>
+#include <limits>
+#include <memory>
 namespace strata::core {
 namespace { bool g_shared_early = true; bool g_fused_gr = false; bool g_fast_attn = true; bool g_publish_kernel = true; bool g_fused_gdn = true; bool g_fast_select = true; }
 namespace {constexpr int Q8K_BYTES_PER_BLOCK = 292;
@@ -493,13 +497,122 @@ std::vector<uint64_t> kv_row_bytes(KvFormat kv, uint64_t hd) {
     default: return {hd * 2, hd * 2};
     }
 }
+
+// ---- the elastic K/V (--kv-grow; after Niko1221/Strata 0.1.40): one VMM range per state, each pool array at a chunk
+// boundary in it, mapped in whole pages from the first cell on (the page table is the identity)
+bool g_kv_elastic = false;
+int64_t g_kv_elastic_init = 16384;
+struct ElasticPool {
+    VmmRange range;
+    std::vector<uint64_t> off, per_page;   // each array's offset in the range (whole chunks) and bytes per page
+    int64_t n_pages = 0, page_size = 0;
+};
+std::vector<std::unique_ptr<ElasticPool>> g_pools;
+
+int64_t pool_chunks(const ElasticPool& p, size_t a, int64_t pages) {
+    const uint64_t G = vmm_granularity();
+    return (int64_t) (((uint64_t) pages * p.per_page[a] + G - 1) / G);
+}
+int64_t pool_pages(const ElasticPool& p, int64_t cells) {
+    return std::min<int64_t>(p.n_pages, std::max<int64_t>((cells + p.page_size - 1) / p.page_size, 1));
+}
+/// Whole pages every array of the pool has mapped.
+int64_t pool_pages_mapped(const ElasticPool& p) {
+    const uint64_t G = vmm_granularity();
+    int64_t pages = p.n_pages;
+    for (size_t a = 0; a < p.off.size(); ++a) {
+        const int64_t c0 = (int64_t) (p.off[a] / G);
+        const int64_t end = a + 1 < p.off.size() ? (int64_t) (p.off[a + 1] / G) : p.range.chunks();
+        int64_t c = 0;
+        while (c0 + c < end && p.range.mapped(c0 + c)) ++c;
+        pages = std::min<int64_t>(pages, (int64_t) ((uint64_t) c * G / p.per_page[a]));
+    }
+    return pages;
+}
+bool pool_grow(ElasticPool& p, int64_t cells, const std::function<VmmChunk()>& take) {
+    const uint64_t G = vmm_granularity();
+    const int64_t pages = pool_pages(p, cells);
+    for (size_t a = 0; a < p.off.size(); ++a) {
+        const int64_t c0 = (int64_t) (p.off[a] / G), c1 = c0 + pool_chunks(p, a, pages);
+        std::vector<int64_t> fresh;
+        for (int64_t c = c0; c < c1; ++c)
+            if (!p.range.mapped(c)) fresh.push_back(c);
+        if (fresh.empty()) continue;
+        if (!p.range.map_range(c0, c1, take)) {
+            std::fprintf(stderr, "strata: the elastic K/V could not map %zu chunks (the driver has no VRAM left)\n",
+                         fresh.size());
+            return false;
+        }
+        // what the chunk held before (another pool's cells, an expert) is not K/V: zeroed, as a new session is
+        for (const int64_t c : fresh)
+            if (cudaMemset(p.range.base() + (uint64_t) c * G, 0, (size_t) G) != cudaSuccess) {
+                std::fprintf(stderr, "strata: the elastic K/V could not clear a chunk: %s\n",
+                             cudaGetErrorString(cudaGetLastError()));
+                return false;
+            }
+    }
+    return true;
+}
 }  // namespace
+
+void qsa_set_kv_elastic(bool enabled, int64_t init_cells) {
+    g_kv_elastic = enabled && vmm_available();
+    if (init_cells > 0) g_kv_elastic_init = init_cells;
+}
+bool qsa_kv_elastic() { return g_kv_elastic; }
+int64_t qsa_kv_elastic_cells() {
+    int64_t cells = std::numeric_limits<int64_t>::max();
+    for (const auto& p : g_pools) cells = std::min<int64_t>(cells, pool_pages_mapped(*p) * p->page_size);
+    return cells;
+}
+int64_t qsa_kv_elastic_need(int64_t cells) {
+    const uint64_t G = vmm_granularity();
+    int64_t n = 0;
+    for (const auto& p : g_pools) {
+        const int64_t pages = pool_pages(*p, cells);
+        for (size_t a = 0; a < p->off.size(); ++a) {
+            const int64_t c0 = (int64_t) (p->off[a] / G), c1 = c0 + pool_chunks(*p, a, pages);
+            for (int64_t c = c0; c < c1; ++c) n += !p->range.mapped(c);
+        }
+    }
+    return n;
+}
+bool qsa_kv_elastic_grow(int64_t cells, const std::function<VmmChunk()>& take) {
+    for (auto& p : g_pools)
+        if (!pool_grow(*p, cells, take)) return false;
+    return cudaDeviceSynchronize() == cudaSuccess;
+}
+int64_t qsa_kv_elastic_shrink(int64_t cells, const std::function<void(VmmChunk)>& give) {
+    const uint64_t G = vmm_granularity();
+    int64_t n = 0;
+    for (auto& p : g_pools) {
+        const int64_t pages = pool_pages(*p, cells);
+        for (size_t a = 0; a < p->off.size(); ++a) {
+            const int64_t c0 = (int64_t) (p->off[a] / G), c1 = c0 + pool_chunks(*p, a, pages);
+            const int64_t end = a + 1 < p->off.size() ? (int64_t) (p->off[a + 1] / G) : p->range.chunks();
+            for (int64_t c = c1; c < end; ++c)
+                if (const VmmChunk h = p->range.unmap(c)) { give(h); ++n; }
+        }
+    }
+    return n;
+}
+uint64_t qsa_kv_elastic_mapped_bytes() {
+    uint64_t n = 0;
+    for (const auto& p : g_pools) n += (uint64_t) p->range.mapped_count() * vmm_granularity();
+    return n;
+}
+uint64_t qsa_kv_elastic_full_bytes() {
+    uint64_t n = 0;
+    for (const auto& p : g_pools) n += (uint64_t) p->range.chunks() * vmm_granularity();
+    return n;
+}
 uint64_t qsa_state_bytes(const ModelGeometry& g, int64_t max_cells, bool with_rope, KvFormat kv) {
     const QsaShapes s = qsa_shapes(g);
     const int64_t pages = (max_cells + s.page_size - 1) / s.page_size;
     uint64_t n = 0;
-    for (const uint64_t b : kv_row_bytes(kv, (uint64_t) s.head_dim))   // the K/V pools
-        n += align_up16((uint64_t) pages * s.n_head_kv * s.page_size * b);
+    if (!g_kv_elastic)   // the K/V pools (the elastic ones are in their own VMM range)
+        for (const uint64_t b : kv_row_bytes(kv, (uint64_t) s.head_dim))
+            n += align_up16((uint64_t) pages * s.n_head_kv * s.page_size * b);
 n += (uint64_t) pages * 4;
 // page_table
 n += (uint64_t) (s.idx_block - 1) * s.idx_dim * 4;
@@ -525,8 +638,31 @@ uint64_t qsa_state_init(const ModelGeometry& g, int64_t max_cells, void* base, Q
     st.kv = kv;
     st.kv_int8 = kv == KvFormat::Int8;
     std::vector<uint8_t*> a;
-    for (const uint64_t b : kv_row_bytes(kv, (uint64_t) s.head_dim))
-        a.push_back(c.take_bytes((uint64_t) pages * s.n_head_kv * s.page_size * b));
+    st.kv_elastic = -1;
+    if (g_kv_elastic) {
+        // the elastic K/V: each array at a chunk boundary of the state's own range, the first cells mapped
+        auto pool = std::make_unique<ElasticPool>();
+        const uint64_t G = vmm_granularity();
+        uint64_t at = 0;
+        for (const uint64_t b : kv_row_bytes(kv, (uint64_t) s.head_dim)) {
+            const uint64_t per = (uint64_t) s.n_head_kv * s.page_size * b;
+            pool->off.push_back(at);
+            pool->per_page.push_back(per);
+            at += ((uint64_t) pages * per + G - 1) / G * G;
+        }
+        pool->n_pages = pages;
+        pool->page_size = s.page_size;
+        if (!pool->range.reserve(at) || !pool_grow(*pool, g_kv_elastic_init, [] { return (VmmChunk) 0; })) {
+            std::fprintf(stderr, "strata: the elastic K/V could not reserve or map its pools\n");
+            return 0;
+        }
+        for (const uint64_t o : pool->off) a.push_back(pool->range.base() + o);
+        st.kv_elastic = (int32_t) g_pools.size();
+        g_pools.push_back(std::move(pool));
+    } else {
+        for (const uint64_t b : kv_row_bytes(kv, (uint64_t) s.head_dim))
+            a.push_back(c.take_bytes((uint64_t) pages * s.n_head_kv * s.page_size * b));
+    }
     switch (kv) {
     case KvFormat::Int8:
         st.k_q = (int8_t*) a[0]; st.v_q = (int8_t*) a[1]; st.k_scale = (uint16_t*) a[2]; st.v_scale = (uint16_t*) a[3];
@@ -604,7 +740,9 @@ void qsa_kv_append_steps(const QsaState& st, const ModelGeometry& g, const int32
 void qsa_state_zero(const QsaState& st, const ModelGeometry& g, void* stream) {
     const QsaShapes s = qsa_shapes(g);
     cudaStream_t cs = (cudaStream_t) stream;
-    const size_t rows = (size_t) st.n_pages * s.n_head_kv * s.page_size;
+    // an elastic state zeroes what is mapped (the rest is zeroed when it is mapped)
+    const int64_t live_pages = st.kv_elastic >= 0 ? pool_pages_mapped(*g_pools[(size_t) st.kv_elastic]) : st.n_pages;
+    const size_t rows = (size_t) live_pages * s.n_head_kv * s.page_size;
     for (const KvArray& a : qsa_kv_arrays(st, g)) cudaMemsetAsync(a.data, 0, rows * a.row_bytes, cs);
     cudaMemsetAsync(st.idx_tail, 0, (size_t) (s.idx_block - 1) * s.idx_dim * 4, cs);    cudaMemsetAsync(st.idx_dead, 0, (size_t) s.idx_dim * 4, cs);    cudaMemsetAsync(st.idx_pooled, 0, (size_t) ((st.max_cells / s.idx_block) + 2) * s.idx_dim * 4, cs);}
 uint64_t qsa_buffers_bytes(const ModelGeometry& g, int64_t max_cells) {    const QsaShapes s = qsa_shapes(g);    const int64_t cap = strata::kernels::qsa_selection_width(strata::kernels::kTopkMaxCells, s);    uint64_t n = 0;    n += (uint64_t) q8k_bytes(g.n_embd);    n += (uint64_t) (g.n_embd / 32) * 34;

@@ -33,6 +33,7 @@
 #pragma once
 
 #include "strata/core/layout.hpp"
+#include "strata/core/vmm.hpp"
 #include "strata/core/weights.hpp"
 
 #include "strata/kernels/gr.hpp"
@@ -41,6 +42,7 @@
 #include "strata/kernels/qsa_decode_attn.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -222,6 +224,9 @@ struct QsaState {
     int32_t* page_table = nullptr;   ///< (n_pages,) logical page -> physical page
     int64_t n_pages = 0;
     int64_t max_cells = 0;
+    /// The elastic K/V (qsa_set_kv_elastic): this state's pools are in a VMM range mapped only as far as the context
+    /// needs - its index in layer.cpp's registry; -1: carved from the arena as before.
+    int32_t kv_elastic = -1;
 
     float* idx_tail = nullptr;       ///< (idx_block - 1, idx_dim): the raw tail of the block being filled
     float* idx_dead = nullptr;       ///< (idx_dim,): the spare slot's key, CONSTANT for the sequence
@@ -281,6 +286,25 @@ struct KvArray {
     uint64_t row_bytes;
 };
 std::vector<KvArray> qsa_kv_arrays(const QsaState& st, const ModelGeometry& g);
+
+/// THE ELASTIC K/V (--kv-grow; vmm.hpp; after Niko1221/Strata 0.1.40).  A state's K/V pools get addresses for every
+/// cell of the context but physical memory only for the first `init_cells`; `qsa_kv_elastic_grow` maps more as the
+/// context grows (from chunks the expert cache gives up) and `qsa_kv_elastic_shrink` hands them back.  The addresses
+/// never move, so the captured graphs stay valid.  Set before sizing and initializing the session and the drafter.
+void qsa_set_kv_elastic(bool enabled, int64_t init_cells);
+bool qsa_kv_elastic();
+/// Cells every elastic state can hold now (INT64_MAX when none is elastic).
+int64_t qsa_kv_elastic_cells();
+/// Chunks still to map for every elastic state to hold `cells` cells.
+int64_t qsa_kv_elastic_need(int64_t cells);
+/// Maps them, each from `take()` (0: a new chunk), the new memory zeroed.  Synchronous; nothing may be running on
+/// the device.  false: out of memory.
+bool qsa_kv_elastic_grow(int64_t cells, const std::function<VmmChunk()>& take);
+/// Unmaps the chunks past `cells` cells, each handed to `give`.  Returns how many.
+int64_t qsa_kv_elastic_shrink(int64_t cells, const std::function<void(VmmChunk)>& give);
+/// Physical bytes the elastic pools hold, and what all of them would at the full context.
+uint64_t qsa_kv_elastic_mapped_bytes();
+uint64_t qsa_kv_elastic_full_bytes();
 
 // ================================ PER-STAGE TIMING, DEBUG ONLY ================================
 //

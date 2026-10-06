@@ -18,6 +18,7 @@
 #include "strata/core/session.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,11 @@ public:
     PromptCache& operator=(const PromptCache&) = delete;
 
     bool enabled() const { return max_ckpts_ > 0; }
+    /// The elastic K/V (--kv-grow): called before any copy of `cells` K/V cells to or from the device (a stashed
+    /// sequence's restore, the live one's stash), so the pools can grow to hold them first.  false: no room.
+    std::function<bool(int64_t cells)> ensure_kv;
+    /// Cells the live sequence holds (a later stash reads all of them).
+    int64_t live_cells() const { return (int64_t) live_.tokens.size(); }
     uint64_t ckpt_bytes() const { return ckpt_bytes_; }
 
     /// Sets the session up for a prompt of `ids`: continues from the longest prefix (at most ids.size() - 1
