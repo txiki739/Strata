@@ -380,7 +380,7 @@ void usage() {
                  "  --second-gpu-prefetch-mb M  per layer, copy its likeliest experts that no GPU holds (the next\n"
                  "                       layer's router on this layer's input), up to M MiB, to it while the RAM is idle\n"
                  "                       (default 12: ~0.28 ms at its ~48 GB/s; 0 = off)\n"
-                 "  --kv-grow            with --serve on one GPU: the K/V takes VRAM only for the cells the requests\n"
+                 "  --kv-grow            with --serve: the K/V takes VRAM only for the cells the requests\n"
                  "                       reach and the expert cache holds the rest, giving slots up as a conversation\n"
                  "                       grows and taking them back after (STRATA_KV_GROW=1/0 too; after Niko1221/Strata\n"
                  "                       0.1.40).  Default: the whole --max-context allocated at start\n"
@@ -1255,17 +1255,18 @@ int main(int argc, char** argv) {
         return 2;
     }
 
-    // ---- the elastic K/V (--kv-grow): set before the session and the drafter are sized.  One GPU (the second GPU's
-    // tier would need the VMM ranges' access granted to it too), with --serve (the CLI path does not grow), a profiled
-    // cache that can give slots up, and every expert in RAM for the CPU to compute the ones it gives up.
+    // ---- the elastic K/V (--kv-grow): set before the session and the drafter are sized.  With --serve (the CLI path
+    // does not grow), a profiled cache that can give slots up, and every expert in RAM for the CPU to compute the ones
+    // it gives up.  The ranges are the main GPU's alone: nothing here reads another card's memory directly (the
+    // second GPU's tier gets its rows through the host), so --second-gpu keeps it.
     {
         const char* ev = std::getenv("STRATA_KV_GROW");
         const bool asked = ev != nullptr && ev[0] != '\0' ? ev[0] != '0' : o.kv_grow;
-        const bool on = asked && o.serve && o.second_gpu < 0 && !o.expert_profile.empty() && o.expert_cache != 0 &&
+        const bool on = asked && o.serve && !o.expert_profile.empty() && o.expert_cache != 0 &&
                         strata::core::vmm_available();
         if (asked && !on)
-            std::fprintf(stderr, "strata generate: --kv-grow is off here: it needs --serve on one GPU (no --second-gpu), "
-                                 "--expert-profile, an expert cache and CUDA virtual memory\n");
+            std::fprintf(stderr, "strata generate: --kv-grow is off here: it needs --serve, --expert-profile, an expert "
+                                 "cache and CUDA virtual memory\n");
         const char* iv = std::getenv("STRATA_KV_GROW_INIT");
         strata::core::qsa_set_kv_elastic(on, iv != nullptr && std::atoll(iv) > 0 ? std::atoll(iv) : 16384);
         strata::core::ExpertCache::set_vmm(on);
@@ -1635,6 +1636,9 @@ int main(int argc, char** argv) {
             if (o.expert_cache <= 0) { o.expert_cache = 0; sized_slots.clear(); break; }
         }
     }
+    // the elastic K/V's VMM arena is the main GPU's cache alone: the second GPU's tier opens its own cache on its own
+    // card (vmm.cpp's chunks belong to the device current at its first call, the main one)
+    strata::core::ExpertCache::set_vmm(false);
     if (o.expert_cache > 0) {
         std::fprintf(stderr, "strata generate: expert cache %lld slots, %.2f GiB of VRAM; policy is\n",
                      (long long) xcache.slots(), xcache.gib());
@@ -2562,7 +2566,8 @@ int main(int argc, char** argv) {
                 for (int64_t l = 0; l < lay.n_layers; ++l)
                     stride = std::max<uint64_t>(stride, ((uint64_t) lay.blob_bytes(l) + 255) & ~(uint64_t) 255);
                 const uint64_t worst_pre = stride * (uint64_t) g.n_expert;
-                const uint64_t worst = strata::prefill::Prefill::bytes_needed(g, ss, o.prefill_chunk, false) +
+                const uint64_t worst = strata::prefill::Prefill::bytes_needed(g, ss, o.prefill_chunk,
+                                                                              pbuf.offload != nullptr) +
                                        worst_pre + worst_pre / 10;
                 SlotLoan probe;
                 probe.cache = &xcache;
