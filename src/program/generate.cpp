@@ -681,6 +681,16 @@ int argmax(const std::vector<float>& v) {
     return best;
 }
 
+/// The residency table's uploads (host -> d_res): a plain cudaMemcpy from pageable memory may return before its DMA
+/// has landed, and the kernels that read the table run on non-blocking streams, which do not wait for the legacy
+/// stream the copy ran on - a kernel enqueued right after could read a table half old, half new (an expert computed
+/// by both the GPU and the CPU, or by neither; Niko1221/Strata#871, #1001, 0.1.40's res_put).  Each upload waits for
+/// its own copy, on the current device's legacy stream only.  Same values, same output.
+cudaError_t res_upload(int32_t* dst, const int32_t* src, size_t n) {
+    const cudaError_t e = cudaMemcpy(dst, src, n * sizeof(int32_t), cudaMemcpyHostToDevice);
+    return e != cudaSuccess ? e : cudaStreamSynchronize(cudaStreamLegacy);
+}
+
 /// Expert-cache slots lent to the batched prompt path for its buffers: the cache's last slots, as many as hold the
 /// buffers, while at least 128 stay.  `lend` takes their experts out of the residency table (the prompt path
 /// streams them instead), `give_back` copies them in again from the arena once the prompt is done.
@@ -715,7 +725,7 @@ struct SlotLoan {
                 lent.emplace_back((int32_t) i, r[i]);
                 r[i] = strata::core::kNotResident;
             }
-        if (d_res != nullptr) cudaMemcpy(d_res, r.data(), r.size() * sizeof(int32_t), cudaMemcpyHostToDevice);
+        if (d_res != nullptr) res_upload(d_res, r.data(), r.size());
     }
     /// After the borrower's last use: its GPU work is waited for first.
     bool give_back(strata::core::ExpertSource& src, int64_t n_expert, std::string& err) {
@@ -736,7 +746,7 @@ struct SlotLoan {
         }
         cudaSetDevice(main_device);
         if (ok && d_res != nullptr)
-            cudaMemcpy(d_res, res->data(), res->size() * sizeof(int32_t), cudaMemcpyHostToDevice);
+            res_upload(d_res, res->data(), res->size());
         lent.clear();
         return ok;
     }
@@ -2240,7 +2250,7 @@ int main(int argc, char** argv) {
             }
         if (cudaMalloc((void**) &d_res, host_res.size() * sizeof(int32_t)) != cudaSuccess ||
             cudaMalloc((void**) &d_hit_count, sizeof(int32_t)) != cudaSuccess ||
-            cudaMemcpy(d_res, host_res.data(), host_res.size() * sizeof(int32_t), cudaMemcpyHostToDevice) != cudaSuccess) {
+            res_upload(d_res, host_res.data(), host_res.size()) != cudaSuccess) {
             std::fprintf(stderr, "strata generate: the device residency table could not be staged\n");
             return 1;
         }
