@@ -504,7 +504,11 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
     };
     if (n2g <= 0) submit2 = nullptr;
     pt("run", njobs);
-    if (native) {
+    // STRATA_POOL_FUSED=1 (opt-in): the layer's gate/up and down rows as one batch, no barrier between them
+    static const bool pool_fused = [] { const char* v = std::getenv("STRATA_POOL_FUSED"); return v != nullptr && std::atoi(v) != 0; }();
+    if (native && pool_fused) {
+        d.pool->run_fused_native(lay.fmt[(size_t) d.layers], d.jobs_multi.data(), njobs, submit2, &s2);
+    } else if (native) {
         d.pool->run_split_multi_native(lay.fmt[(size_t) d.layers], d.jobs_multi.data(), njobs, submit2, &s2);
     } else {
         if (submit2 != nullptr) submit2(&s2);

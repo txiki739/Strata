@@ -32,6 +32,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <thread>
 #include <vector>
@@ -165,6 +166,12 @@ public:
     void run_split_multi_native(const NativeFmt& f, ExpertJobMulti* jobs, int n, void (*first)(void*) = nullptr,
                                 void* ctx = nullptr);
     static constexpr int kMaxSplitMulti = 96;
+    /// The same layer as ONE phase (mode 7, STRATA_POOL_FUSED=1, opt-in): every expert's gate/up parts, then every
+    /// expert's down parts; the thread that finishes an expert's last gate/up part quantizes its h, and that
+    /// expert's down parts wait for it.  No barrier between the halves and no serial quantization on the host in
+    /// between.  The same bytes as `run_split_multi_native`.  (After Hardin22/Strata-DualGPU 11b1f25.)
+    void run_fused_native(const NativeFmt& f, ExpertJobMulti* jobs, int n, void (*first)(void*) = nullptr,
+                          void* ctx = nullptr);
     /// run_split_multi's phases, accumulated ms: gate/up rows, the intermediate quantization, down rows.
     double ms_multi_gu = 0, ms_multi_q = 0, ms_multi_down = 0;
     int64_t multi_bytes = 0;
@@ -235,6 +242,16 @@ private:
     };
     const NativeFmt* nfmt_ = nullptr;
     std::vector<SplitBufMulti> split_multi_;
+    // run_fused_native state (mode 7): per expert, its gate/up parts done and whether its h is quantized
+    struct FusedState {
+        alignas(64) std::atomic<int> gu_done{0};
+        std::atomic<int> ready{0};
+    };
+    std::unique_ptr<FusedState[]> fstate_;
+    int fn_ = 0, fa_ = 1, fb_ = 1;   // experts, gate/up parts and down parts per expert
+    void native_gu_part(int e, int r0, int r1);
+    void native_quant_part(int e);
+    void native_down_part(int e, int r0, int r1);
 };
 #ifdef _MSC_VER
 #pragma warning(pop)
