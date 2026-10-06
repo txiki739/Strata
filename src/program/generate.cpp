@@ -1262,11 +1262,13 @@ int main(int argc, char** argv) {
     {
         const char* ev = std::getenv("STRATA_KV_GROW");
         const bool asked = ev != nullptr && ev[0] != '\0' ? ev[0] != '0' : o.kv_grow;
-        const bool on = asked && o.serve && !o.expert_profile.empty() && o.expert_cache != 0 &&
+        // not with --mmap-experts (as upstream's: every expert in RAM): a slot given up there is read back from the
+        // file by the prompt path, and a UD-Q4_K_XL session at 64 GB of RAM ended in a crash after the first growth
+        const bool on = asked && o.serve && !o.expert_profile.empty() && o.expert_cache != 0 && !o.mmap_experts &&
                         strata::core::vmm_available();
         if (asked && !on)
             std::fprintf(stderr, "strata generate: --kv-grow is off here: it needs --serve, --expert-profile, an expert "
-                                 "cache and CUDA virtual memory\n");
+                                 "cache, every expert in RAM (not --mmap-experts) and CUDA virtual memory\n");
         const char* iv = std::getenv("STRATA_KV_GROW_INIT");
         strata::core::qsa_set_kv_elastic(on, iv != nullptr && std::atoll(iv) > 0 ? std::atoll(iv) : 16384);
         strata::core::ExpertCache::set_vmm(on);
