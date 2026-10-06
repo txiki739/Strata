@@ -1,23 +1,23 @@
 <h1 align="center">Strata en un Ryzen 7 5700X + RTX 3090 + RTX 5060 Ti</h1>
 
-<p align="center"><b>Qwen3.8-Flash-Next 125B (MoE) en un PC de escritorio: 84 tokens/s con una RTX 3090 y 109 tokens/s con una RTX 5060 Ti al lado</b><br>
+<p align="center"><b>Qwen3.8-Flash-Next 125B (MoE) en un PC de escritorio: 93 tokens/s con una RTX 3090 y 116 tokens/s con una RTX 5060 Ti al lado</b><br>
 UD-IQ4_XS y UD-Q4_K_XL de unsloth · 128 GB DDR4 · Linux · <a href="README.md">in English</a></p>
 
 Esta es la rama `custom` de [eddoursul/Strata](https://github.com/eddoursul/Strata), un fork de
 [Niko1221/Strata](https://github.com/Niko1221/Strata) afinado para una RTX 3090 con una segunda gráfica como nivel de
-expertos, más algunos arreglos y varios cambios recientes del motor original, medida en un solo equipo con una gráfica
-y con dos. El README original de Strata (qué es, instalación, todas las opciones) está en
+expertos, más algunos arreglos y varios cambios recientes del motor original (entre ellos la caché K/V elástica de la
+0.1.40), medida en un solo equipo con una gráfica y con dos. El README original de Strata (qué es, instalación, todas las opciones) está en
 [STRATA-README.md](STRATA-README.md).
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/summary-dark.svg">
-  <img alt="Velocidad de generación, media de seis textos. UD-IQ4_XS: 83,6 tok/s con la RTX 3090 y 109,4 con la RTX 5060 Ti. UD-Q4_K_XL: 64,2 y 80,5." src="docs/media/readme/summary-light.svg">
+  <img alt="Velocidad de generación, media de seis textos. UD-IQ4_XS: 92,9 tok/s con la RTX 3090 y 116,3 con la RTX 5060 Ti. UD-Q4_K_XL: 71,2 y 84,9." src="docs/media/readme/summary-light.svg">
 </picture>
 
 | Generación, tokens/s | RTX 3090 | RTX 3090 + RTX 5060 Ti | con la segunda gráfica |
 |---|---:|---:|---:|
-| UD-IQ4_XS | **83,6** | **109,4** | +31 % |
-| UD-Q4_K_XL | **64,2** | **80,5** | +25 % |
+| UD-IQ4_XS | **92,9** | **116,3** | +25 % |
+| UD-Q4_K_XL | **71,2** | **84,9** | +19 % |
 
 ## El equipo
 
@@ -46,8 +46,9 @@ Qwen3.8-Flash-Next tiene 48 capas de 512 expertos. Strata guarda los expertos en
 | RAM que ocupa el motor | ~58 GiB | ~81 GB |
 | Kernels de CPU de los expertos | limitados por cálculo: escalan con los núcleos | limitados por ancho de banda: la DDR4 se satura con ~4 núcleos |
 
-Los dos van con 200.192 tokens de contexto, caché KV int8, la capa de borrador MTP con vocabulario español y búsqueda
-en el prompt, y verificación greedy: la especulación nunca cambia la salida.
+Los dos van con 200.192 tokens de contexto, caché KV int8 que solo ocupa VRAM según crece la conversación
+(`--kv-grow`: mientras tanto la caché de expertos guarda ~1.000 expertos más), la capa de borrador MTP con vocabulario
+español y búsqueda en el prompt, y verificación greedy: la especulación nunca cambia la salida.
 
 ## Una gráfica o dos
 
@@ -55,12 +56,12 @@ La RTX 5060 Ti guarda ~14,5 GB más de expertos y calcula su parte de cada capa 
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 86,0/114,9, razonamiento 87,7/113,2, tras un documento de 18K 69,9/98,1, código 88,5/118,7, edición 114,8/165,2, tras un prompt de 5K 63,5/68,5." src="docs/media/readme/decode-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 89,9/116,7, razonamiento 97,5/122,9, tras un documento de 18K 79,5/101,8, código 99,1/129,4, edición 132,8/183,2, tras un prompt de 5K 70,0/71,4." src="docs/media/readme/decode-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 62,5/86,1, razonamiento 69,8/81,6, tras un documento de 18K 54,8/73,7, código 68,1/84,6, edición 87,9/118,1, tras un prompt de 5K 49,1/52,7." src="docs/media/readme/decode-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 70,2/88,8, razonamiento 83,7/86,4, tras un documento de 18K 59,3/77,9, código 74,8/89,9, edición 97,0/129,2, tras un prompt de 5K 51,7/53,8." src="docs/media/readme/decode-q4kxl-light.svg">
 </picture>
 
 La lectura del prompt (prefill) gana con la segunda gráfica en los prompts cortos; uno de 18K lo limita el enlace x8 de
@@ -68,118 +69,124 @@ la 3090 en los dos casos.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-dark.svg">
-  <img alt="Prefill de UD-IQ4_XS, RTX 3090 frente a las dos: 18.076 tokens 1.787/1.800 tok/s, 5.296 tokens 1.131/1.461, 3.340 tokens 811/1.036." src="docs/media/readme/prefill-iq4xs-light.svg">
+  <img alt="Prefill de UD-IQ4_XS, RTX 3090 frente a las dos: 18.076 tokens 1.803/1.836 tok/s, 5.296 tokens 1.180/1.550, 3.340 tokens 851/1.086." src="docs/media/readme/prefill-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-dark.svg">
-  <img alt="Prefill de UD-Q4_K_XL, RTX 3090 frente a las dos: 18.076 tokens 1.702/1.716 tok/s, 5.296 tokens 869/1.066, 3.340 tokens 637/765." src="docs/media/readme/prefill-q4kxl-light.svg">
+  <img alt="Prefill de UD-Q4_K_XL, RTX 3090 frente a las dos: 18.076 tokens 1.730/1.758 tok/s, 5.296 tokens 899/1.113, 3.340 tokens 660/794." src="docs/media/readme/prefill-q4kxl-light.svg">
 </picture>
 
-Aquí UD-IQ4_XS es el más rápido (+30 % con una gráfica, +36 % con dos): sus expertos ocupan menos, así que caben más
-en VRAM (81 % / 89 % de aciertos frente a 78 % / 83 %), y sus kernels de CPU, limitados por cálculo, aprovechan los
+Aquí UD-IQ4_XS es el más rápido (+30 % con una gráfica, +37 % con dos): sus expertos ocupan menos, así que caben más
+en VRAM (84 % / 91 % de aciertos frente a 81 % / 85 %), y sus kernels de CPU, limitados por cálculo, aprovechan los
 siete workers. UD-Q4_K_XL es el cuantizado más grande y de más precisión.
 
 ## Prompts largos
 
 Prompts de 32K a 200K tokens distintos (prosa, luego la documentación y el código de este repositorio) con 128 tokens
-de respuesta. La lectura del prompt se mantiene en 2.200-2.440 tokens/s en las cuatro configuraciones hasta el contexto
-de 200.192 tokens: un prompt de 200K tarda 85-92 s antes del primer token. Con la segunda gráfica, UD-IQ4_XS sigue
-generando a ~97 tok/s incluso a 200K.
+de respuesta. La lectura del prompt se mantiene en 2.200-2.500 tokens/s en las cuatro configuraciones hasta el contexto
+de 200.192 tokens: un prompt de 200K tarda 84-91 s antes del primer token. La K/V crece con el prompt (llega al
+contexto entero cediendo ~450 ranuras de expertos), y con la segunda gráfica UD-IQ4_XS sigue generando a ~97 tok/s
+incluso a 200K.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 67,0/92,1, 64K 87,0/96,8, 120K 61,5/98,9, 200K 54,9/97,6 tok/s." src="docs/media/readme/longctx-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 73,5/94,7, 64K 93,6/99,9, 120K 66,2/98,1, 200K 60,0/97,3 tok/s." src="docs/media/readme/longctx-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/longctx-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 51,8/83,3, 64K 64,3/93,3, 120K 47,4/68,3, 200K 45,8/68,2 tok/s." src="docs/media/readme/longctx-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL generando justo después de un prompt largo, RTX 3090 frente a las dos: 32K 58,6/83,0, 64K 77,0/90,0, 120K 48,4/69,8, 200K 41,6/74,0 tok/s." src="docs/media/readme/longctx-q4kxl-light.svg">
 </picture>
 
 | Prompt | Tiempo de lectura (las cuatro) | Generación después: UD-IQ4_XS 1 / 2 GPU | UD-Q4_K_XL 1 / 2 GPU |
 |---|---:|---:|---:|
-| 32.022 tokens | 13-14 s | 67,0 / 92,1 | 51,8 / 83,3 |
-| 64.022 tokens | 26-27 s | 87,0 / 96,8 | 64,3 / 93,3 |
-| 120.019 tokens | 49-52 s | 61,5 / 98,9 | 47,4 / 68,3 |
-| 200.019 tokens | 85-92 s | 54,9 / 97,6 | 45,8 / 68,2 |
+| 32.022 tokens | 13-14 s | 73,5 / 94,7 | 58,6 / 83,0 |
+| 64.022 tokens | 26-27 s | 93,6 / 99,9 | 77,0 / 90,0 |
+| 120.019 tokens | 48-51 s | 66,2 / 98,1 | 48,4 / 69,8 |
+| 200.019 tokens | 84-91 s | 60,0 / 97,3 | 41,6 / 74,0 |
 
 La generación tras un prompt largo sale de 128 tokens, así que varía más de una ronda a otra que las medias de los seis textos.
 
 ## Sesiones largas de agente
 
-18 turnos a través de `serve/server.py`, como los mandaría un agente de programación: ficheros de código pegados,
-documentación, cambios de tema, la conversación creciendo hasta ~31K tokens y 600 tokens por respuesta. Con una gráfica:
-**UD-IQ4_XS 78,1 tok/s**, UD-Q4_K_XL 59,9 tok/s (tres y dos rondas; con 64 GB de RAM, más abajo).
+18 turnos a través del servidor de Niko1221/Strata (el que se usa aquí, ver [el servidor](#el-servidor)), como los
+mandaría un agente de programación: ficheros de código pegados, documentación, cambios de tema, la conversación
+creciendo hasta ~31K tokens y 600 tokens por respuesta. Con una gráfica: **UD-IQ4_XS 86,2 tok/s**, UD-Q4_K_XL
+64,5 tok/s (una ronda cada uno; antes de la K/V elástica y el pool fusionado 78,1 y 59,9; con 64 GB de RAM, más abajo).
 
 ## Con 64 GB de RAM
 
 El mismo PC con el motor limitado a 60 GiB (lo que deja libre un PC de 64 GB) con un cgroup de systemd
-(`MemoryMax=60G`): la memoria del motor y la caché de disco de los ficheros del modelo que lee cuentan dentro. UD-IQ4_XS
-(55,4 GiB de expertos) sigue cabiendo, justo en el límite. UD-Q4_K_XL (71,7 GiB) no cabe: va con un pack con
-`experts.bin` (`iq_pack.py --experts-bin`) y `--mmap-experts`, y lee del NVMe los expertos que le faltan.
+(`MemoryMax=60G`): cuentan en él la memoria del motor y la caché de disco de los ficheros del modelo que lee. UD-IQ4_XS
+(55,4 GiB de expertos) sigue cabiendo, justo en el límite. UD-Q4_K_XL (71,7 GiB) no: va con un pack con `experts.bin`
+(`iq_pack.py --experts-bin`) y `--mmap-experts`, y lee del NVMe los expertos que le faltan; ahí `--kv-grow` se apaga
+solo.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/ram64-dark.svg">
-  <img alt="Generación con 128 GB y con 64 GB de RAM: UD-IQ4_XS RTX 3090 83,6/81,5, con las dos 109,4/104,7; UD-Q4_K_XL RTX 3090 64,2/21,4, con las dos 80,5/25,2." src="docs/media/readme/ram64-light.svg">
+  <img alt="Generación con 128 GB y con 64 GB de RAM: UD-IQ4_XS RTX 3090 92,9/92,7, con las dos 116,3/115,7; UD-Q4_K_XL RTX 3090 71,2/25,9, con las dos 84,9/39,7." src="docs/media/readme/ram64-light.svg">
 </picture>
 
 | Generación, tokens/s | 128 GB | 64 GB |
 |---|---:|---:|
-| UD-IQ4_XS, RTX 3090 | 83,6 | 81,5 (3 rondas: 79,4-82,7) |
-| UD-IQ4_XS, las dos | 109,4 | 104,7 (2 rondas: 101,9-107,5) |
-| UD-Q4_K_XL, RTX 3090 | 64,2 | 21,4 (2 rondas: 20,4-22,3) |
-| UD-Q4_K_XL, las dos | 80,5 | 25,2 (1 ronda) |
+| UD-IQ4_XS, RTX 3090 | 92,9 | 92,7 (2 rondas: 92,6-92,7) |
+| UD-IQ4_XS, las dos gráficas | 116,3 | 115,7 (2 rondas: 114,8-116,7) |
+| UD-Q4_K_XL, RTX 3090 | 71,2 | 25,9 (1 ronda) |
+| UD-Q4_K_XL, las dos gráficas | 84,9 | 39,7 (1 ronda) |
 
-- UD-IQ4_XS pierde un 2-4 %: el motor está en su techo de 60 GiB y el sistema relee parte de los ficheros del modelo,
-  lo que frena sobre todo la lectura de los prompts cortos (abajo).
-- UD-Q4_K_XL depende del NVMe (un Crucial P3 Plus) y varía mucho de una sesión a otra: una sesión anterior en este PC
-  dio 24,4 con la RTX 3090 y 37,1 con las dos.
+- UD-IQ4_XS va ahora con 64 GB igual que con 128 GB, también al leer prompts (antes de la K/V elástica y el pool
+  fusionado perdía ahí un 2-4 %).
+- **Con 64 GB, usa `--prompt-cache 4`** (el motor trae 16 por defecto): cada punto de control de la caché de prompts
+  ocupa ~112 MiB de RAM, y en una sesión de agente 16 de ellos pasaron a UD-IQ4_XS del límite.
+- UD-Q4_K_XL lo limita el NVMe (un Crucial P3 Plus) y varía mucho de una sesión a otra.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-64-dark.svg">
-  <img alt="UD-IQ4_XS con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 83,2/95,5, razonamiento 87,5/106,9, tras un documento de 18K 67,8/98,0, código 85,3/119,5, edición 114,8/164,8, tras un prompt de 5K 61,0/68,0." src="docs/media/readme/decode-iq4xs-64-light.svg">
+  <img alt="UD-IQ4_XS con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 89,8/112,4, razonamiento 97,3/120,2, tras un documento de 18K 79,0/104,4, código 99,2/127,7, edición 132,8/183,3, tras un prompt de 5K 69,6/72,8." src="docs/media/readme/decode-iq4xs-64-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-64-dark.svg">
-  <img alt="UD-Q4_K_XL con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 24,0/33,0, razonamiento 24,3/36,4, tras un documento de 18K 20,4/36,1, código 26,2/17,6, edición 32,7/65,0, tras un prompt de 5K 10,5/5,1." src="docs/media/readme/decode-q4kxl-64-light.svg">
+  <img alt="UD-Q4_K_XL con 64 GB de RAM, generación por texto, RTX 3090 frente a las dos: chat en español 25,2/37,3, razonamiento 30,5/39,7, tras un documento de 18K 19,9/32,9, código 28,3/43,1, edición 44,2/71,3, tras un prompt de 5K 15,7/26,1." src="docs/media/readme/decode-q4kxl-64-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-64-dark.svg">
-  <img alt="UD-IQ4_XS con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 1.619/1.177 tok/s, 5.296 tokens 1.059/1.287, 3.340 tokens 676/1.038." src="docs/media/readme/prefill-iq4xs-64-light.svg">
+  <img alt="UD-IQ4_XS con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 1.813/1.833 tok/s, 5.296 tokens 1.180/1.550, 3.340 tokens 851/1.084." src="docs/media/readme/prefill-iq4xs-64-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-64-dark.svg">
-  <img alt="UD-Q4_K_XL con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 300/521 tok/s, 5.296 tokens 106/188, 3.340 tokens 94/52." src="docs/media/readme/prefill-q4kxl-64-light.svg">
+  <img alt="UD-Q4_K_XL con 64 GB de RAM, prefill, RTX 3090 frente a las dos: 18.076 tokens 438/491 tok/s, 5.296 tokens 162/213, 3.340 tokens 147/157." src="docs/media/readme/prefill-q4kxl-64-light.svg">
 </picture>
 
-
-Prompts largos con 64 GB (una ronda cada uno), tiempo de lectura del prompt y generación justo después:
+Prompts largos con 64 GB (una ronda cada uno): tiempo de lectura del prompt y generación justo después. Los de
+UD-Q4_K_XL son del motor anterior a la K/V elástica y el pool fusionado (un prompt de 200K tardó 43,8 min; no se ha
+repetido):
 
 | Prompt | UD-IQ4_XS, RTX 3090 | UD-IQ4_XS, las dos | UD-Q4_K_XL, RTX 3090 | UD-Q4_K_XL, las dos |
 |---|---:|---:|---:|---:|
-| 32.022 tokens | 13,7 s · 59,5 | 13,6 s · 89,0 | 42,7 s · 17,8 | 44,1 s · 33,1 |
-| 64.022 tokens | 26,6 s · 75,9 | 26,2 s · 96,1 | 2,7 min · 22,9 | 1,7 min · 50,0 |
-| 120.019 tokens | 51,0 s · 61,0 | 49,0 s · 91,3 | 4,6 min · 2,7 | 72,1 s · 50,2 |
-| 200.019 tokens | 89,4 s · 57,1 | 84,3 s · 97,7 | 43,8 min · 6,0 | 2,0 min · 8,2 |
+| 32.022 tokens | 13,4 s · 75,1 | 13,4 s · 101,4 | 42,7 s · 17,8 | 44,1 s · 33,1 |
+| 64.022 tokens | 26,3 s · 95,0 | 25,6 s · 97,7 | 2,7 min · 22,9 | 1,7 min · 50,0 |
+| 120.019 tokens | 50,3 s · 64,9 | 48,1 s · 105,6 | 4,6 min · 2,7 | 72,1 s · 50,2 |
+| 200.019 tokens | 88,3 s · 59,4 | 83,3 s · 98,2 | 43,8 min · 6,0 | 2,0 min · 8,2 |
 
-- UD-IQ4_XS lee los prompts largos igual de rápido que con 128 GB y, con las dos gráficas, sigue generando a ~90-98 tok/s después.
-- UD-Q4_K_XL relee sus expertos del NVMe en cada bloque de 32K del prompt: uno de 200K tardó 43,8 min con una gráfica
-  y luego generó a 6,0 tok/s. Con 64 GB no sirve para contextos largos.
+- UD-IQ4_XS lee los prompts largos tan rápido como con 128 GB, y con las dos gráficas sigue generando a ~98-106 tok/s
+  después.
+- UD-Q4_K_XL vuelve a leer sus expertos del NVMe en cada bloque de 32K de un prompt: con 64 GB no sirve para contextos
+  largos.
 
-Sesiones de agente con 64 GB (los mismos 18 turnos, dos rondas cada una): UD-IQ4_XS 76,0 tok/s (128 GB: 78,1),
-UD-Q4_K_XL 25,1 tok/s (128 GB: 59,9).
+Sesiones de agente con 64 GB (los mismos 18 turnos, `--prompt-cache 4`, una ronda cada una): UD-IQ4_XS 85,6 tok/s
+(128 GB: 86,2), UD-Q4_K_XL 30,7 tok/s (128 GB: 64,5).
 
-Con 64 GB lo que hay que usar es UD-IQ4_XS; UD-Q4_K_XL necesita un PC de 96 GB o más (~81 GB para el motor más el sistema).
+Con 64 GB, el que conviene es UD-IQ4_XS; UD-Q4_K_XL pide un PC de 96 GB o más (~81 GB para el motor más el sistema).
 
 ## Lo que han aportado los cambios sobre `custom` de eddoursul
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/steps-dark.svg">
-  <img alt="UD-IQ4_XS con la RTX 3090: custom de eddoursul + arreglos 77,3, + kernel IQ4_XS AVX-2 78,0, + gather AVX2 80,9, + --adapt-decay 0.92 83,3, + PR #863/#851/#606 del original 83,6 tok/s." src="docs/media/readme/steps-light.svg">
+  <img alt="UD-IQ4_XS con la RTX 3090: custom de eddoursul + arreglos 77,3, + kernel IQ4_XS AVX-2 78,0, + gather AVX2 80,9, + --adapt-decay 0.92 83,3, + PR #863/#851/#606 del original 83,6, + K/V elástica 90,9, + pool de CPU fusionado 92,9 tok/s." src="docs/media/readme/steps-light.svg">
 </picture>
 
 - El **kernel IQ4_XS AVX-2 multi-token** (#415 del motor original): la única capa IQ4_XS ya no va token a token.
@@ -187,22 +194,30 @@ Con 64 GB lo que hay que usar es UD-IQ4_XS; UD-Q4_K_XL necesita un PC de 96 GB o
   +4,9 % en Zen 3. En el original es opcional porque la velocidad del gather depende de la CPU.
 - **`--adapt-decay 0.92`** (opción del motor original; 0,7 por defecto): la caché de VRAM recuerda más tiempo qué
   expertos se usaron. En las sesiones de agente los tres pasos dieron 75,0 -> 77,8 (+3,7 %).
+- **La K/V elástica (`--kv-grow`)**, portada de la 0.1.40 del original: la K/V de 200K de contexto (2,6 GiB en int8)
+  ya no ocupa VRAM desde el arranque; la caché de expertos usa esas ~1.000 ranuras hasta que una conversación necesita
+  las celdas. Los dos últimos pasos se midieron uno frente a otro en la misma sesión (82,5 -> 90,9 -> 92,9; la base de
+  los pasos anteriores dio 83,6 el día antes).
+- **El pool de CPU fusionado (`STRATA_POOL_FUSED=1`)**, a partir de Hardin22/Strata-DualGPU: gate/up y down de una capa
+  en un solo lote, así que los núcleos ya no se esperan entre las dos mitades. Las mismas operaciones, +2-4 % en todas
+  las configuraciones.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decay-dark.svg">
   <img alt="UD-IQ4_XS con la RTX 3090 según --adapt-decay: 0,7 76,8, 0,85 82,1, 0,92 83,6, 0,95 81,0, 0,97 81,3, 0,99 70,8 tok/s." src="docs/media/readme/decay-light.svg">
 </picture>
 
-Dos rondas por valor con el motor actual (0,92: las rondas del README). A 0,99 la caché apenas sigue ya el texto, y
-el 1,0 ahora se rechaza (PR #591). Con la segunda gráfica 0,92 anulaba la ganancia del gather, y en UD-Q4_K_XL no
+Dos rondas por valor, medidas antes de la K/V elástica y el pool fusionado (0,92 daba entonces 83,6). A 0,99 la caché
+apenas sigue ya el texto, y el 1,0 ahora se rechaza (PR #591). Con la segunda gráfica 0,92 anulaba la ganancia del gather, y en UD-Q4_K_XL no
 aportaba en las sesiones de agente, así que esas configuraciones se quedan en 0,7.
 
 Los arreglos, propuestos a eddoursul/Strata: el arreglo del bloqueo con dos gráficas del #2, de FlareP1, y
 [una continuación](https://github.com/eddoursul/Strata/pull/2) para el congelamiento de la caché que provoca con 6 o
-más workers; `--mmap-experts` con packs nativos ([#5](https://github.com/eddoursul/Strata/pull/5)); un worker por
+más workers (ya forma parte del #2); `--mmap-experts` con packs nativos ([#5](https://github.com/eddoursul/Strata/pull/5)); un worker por
 núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que el motor salga en cuanto recibe `QUIT`
 ([#7](https://github.com/eddoursul/Strata/pull/7)); el vocabulario de borrador en español
-([#8](https://github.com/eddoursul/Strata/pull/8)).
+([#8](https://github.com/eddoursul/Strata/pull/8); también al original, hecho con su propia herramienta:
+[Niko1221/Strata#1186](https://github.com/Niko1221/Strata/pull/1186)).
 
 ### Añadidos posteriores (de pull requests abiertos del motor original)
 
@@ -215,6 +230,23 @@ núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que
 - **Un cuantizador AVX2 de activaciones Q8_K** (PR #851 de Hardin22): los mismos bytes que el de ggml; aquí no se nota.
 - **`--adapt-decay` fuera de (0, 1) rechazado** (PR #591). UD-Q4_K_XL no cambia con ninguno de los cuatro.
 
+### Y de la 0.1.40 del original y de otros forks
+
+- **La K/V elástica** (2fbe321 del original, `--kv-grow`): la K/V y la zona de la caché de expertos son rangos de
+  memoria virtual de CUDA; cuando una petición necesita más celdas, las ranuras justo por debajo del préstamo del
+  prefill ceden sus expertos (antes, uno más usado pasa a la ranura más fría del préstamo) y sus trozos de 2 MiB se
+  mapean en la K/V; una petición corta posterior los devuelve. Creciendo con VRAM libre da los mismos tokens bit a bit
+  que sin ella (también con la caché de prompts guardando y restaurando conversaciones intercaladas); ceder ranuras
+  solo pasa expertos de la GPU a la CPU, como hace la caché adaptativa en cada ventana. El límite de las ranuras que
+  puede tomar es el préstamo más grande del prefill (sus buffers crecen con los expertos que la caché no guarda). Con
+  `--mmap-experts` queda apagada, como en el original.
+- **Las subidas de la tabla de residencia esperan a su copia** (#1001 del original): una carrera rara podía hacer que
+  un experto lo calcularan la GPU y la CPU a la vez, o ninguna.
+- Probado y descartado: el decodificado escalar de IQ3_S del PR #930 del original (mismos bits y un 14 % más rápido en
+  un hilo con un token, pero nada en el motor: con ocho hilos manda la RAM; sus interruptores quedan, apagados),
+  `--no-second-gpu-adapt` de guthirry (sin cambio) y las cachés K/V de 4 bits (`k8v4`, `q4_0`: pierden algo de
+  precisión).
+
 ## Workers de CPU
 
 <picture>
@@ -224,8 +256,8 @@ núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que
 
 Descomprimir los expertos de UD-IQ4_XS cuesta (búsquedas en tablas, ~5 GB/s por núcleo), así que cada núcleo suma hasta
 los siete que puede dar la CPU (uno es el hilo principal del motor). Los de UD-Q4_K_XL se descomprimen rápido y cuatro
-núcleos ya leen la RAM tan deprisa como da (de 3 a 6 da lo mismo). Dos rondas por punto con el motor actual; los
-puntos de los ajustes de producción (7 y 4 workers) son las rondas del README.
+núcleos ya leen la RAM tan deprisa como da (de 3 a 6 da lo mismo). Dos rondas por punto, medidas antes de la K/V
+elástica y el pool fusionado.
 
 ## Ajustes y cómo usarlo
 
@@ -236,8 +268,32 @@ puntos de los ajustes de producción (7 y 4 workers) son las rondas del README.
 | `--adapt-decay` | 0,92 | 0,7 | 0,7 | 0,7 |
 | `STRATA_IQ256_GATHER` | 1 | 1 | - | - |
 | `--pcie-frac` (kernel) | 0 | 0 | 0,3 | 0 |
+| `--kv-grow` | sí | sí | sí | sí |
+| `STRATA_POOL_FUSED` | 1 | 1 | 1 | 1 |
 
 Las cuatro configuraciones y los pasos para compilar y arrancarlas en Linux: [examples/r7-5700x](examples/r7-5700x/).
+
+### El servidor
+
+El `serve/server.py` de este repositorio es el de eddoursul. Aquí el motor lo sirve **el servidor de Niko1221/Strata**
+(su `main`, probado en `82f46a8`), que funciona con este motor tal cual y corrige dos cosas que el anterior hace mal:
+
+- un mensaje con el texto de un token de control (`<|im_end|>`, `<|im_start|>`, `<think>`...) se codifica como texto:
+  un agente que lee un fichero que los contiene ya no corta ahí su turno, y un documento no puede colar un turno de
+  sistema (#931);
+- una `<tool_call>` que el modelo escribe de ejemplo (en un bloque de código, en su respuesta) es texto, no una
+  llamada (#1058).
+
+Reutiliza el contexto de una conversación igual que el anterior (las mismas sesiones de agente releen los mismos
+~31K tokens).
+
+    git clone https://github.com/Niko1221/Strata ../Strata-niko-server
+    .venv/bin/python ../Strata-niko-server/serve/server.py --engine strata \
+        --config examples/r7-5700x/ud-iq4_xs-3090.json --port 8092
+
+Se arranca desde la carpeta de este repositorio (las rutas de las configuraciones son relativas a ella). Sin clave de
+API responde a los nombres de este PC y a direcciones IP; para entrar con otro nombre de host (uno de tu red local o
+tu VPN, por ejemplo), hay que añadirlo en `"allowed_hosts"` de la configuración.
 
 ## Cómo se ha medido
 
@@ -246,6 +302,7 @@ Las cuatro configuraciones y los pasos para compilar y arrancarlas en Linux: [ex
   3.340 tokens devuelto editado (~2.600) y un prompt de 5.296 tokens (256). Los textos largos son notas privadas y no
   se publican.
 - El motor directamente por su protocolo `--serve`, sin caché de prompt, greedy, con especulación. La velocidad de
-  generación es la media geométrica de los seis textos; cada configuración es la media de dos a seis rondas (a menos
-  de un 3 % entre sí, salvo una ronda de UD-Q4_K_XL a -5 %), intercaladas con la base al comparar versiones.
+  generación es la media geométrica de los seis textos; cada configuración es la media de dos rondas (a menos de un
+  1,5 % entre sí), intercaladas con la base al comparar versiones. Las sesiones de agente pasan por el servidor de
+  Niko1221/Strata.
 - Tablas completas: [docs/MEASUREMENTS.es.md](docs/MEASUREMENTS.es.md).

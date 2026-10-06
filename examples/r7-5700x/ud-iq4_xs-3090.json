@@ -40,13 +40,15 @@
     "--pool-workers",
     "7",
     "--adapt-decay",
-    "0.92"
+    "0.92",
+    "--kv-grow"
   ],
   "cwd": ".",
   "tokenizer": "../Strata-data/packs/ud-iq4_xs/tokenizer",
   "model_name": "UD-IQ4_XS",
   "lib_dirs": [],
   "env": {
-    "STRATA_IQ256_GATHER": "1"
+    "STRATA_IQ256_GATHER": "1",
+    "STRATA_POOL_FUSED": "1"
   }
 }

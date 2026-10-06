@@ -36,10 +36,14 @@
     "--head-split",
     "0",
     "--pool-workers",
-    "4"
+    "4",
+    "--kv-grow"
   ],
   "cwd": ".",
   "tokenizer": "../Strata-data/packs/ud-q4_k_xl/tokenizer",
   "model_name": "UD-Q4_K_XL",
-  "lib_dirs": []
+  "lib_dirs": [],
+  "env": {
+    "STRATA_POOL_FUSED": "1"
+  }
 }

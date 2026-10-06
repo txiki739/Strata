@@ -8,24 +8,24 @@
 <line x1="120.0" y1="28" x2="120.0" y2="130" stroke="#d1d9e0" stroke-width="1"/>
 <text x="120.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">0</text>
 <line x1="216.7" y1="28" x2="216.7" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="216.7" y="146" font-size="11" fill="#59636e" text-anchor="middle">20</text>
+<text x="216.7" y="146" font-size="11" fill="#59636e" text-anchor="middle">25</text>
 <line x1="313.3" y1="28" x2="313.3" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="313.3" y="146" font-size="11" fill="#59636e" text-anchor="middle">40</text>
+<text x="313.3" y="146" font-size="11" fill="#59636e" text-anchor="middle">50</text>
 <line x1="410.0" y1="28" x2="410.0" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="410.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">60</text>
+<text x="410.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">75</text>
 <line x1="506.7" y1="28" x2="506.7" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="506.7" y="146" font-size="11" fill="#59636e" text-anchor="middle">80</text>
+<text x="506.7" y="146" font-size="11" fill="#59636e" text-anchor="middle">100</text>
 <line x1="603.3" y1="28" x2="603.3" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="603.3" y="146" font-size="11" fill="#59636e" text-anchor="middle">100</text>
+<text x="603.3" y="146" font-size="11" fill="#59636e" text-anchor="middle">125</text>
 <line x1="700.0" y1="28" x2="700.0" y2="130" stroke="#d1d9e0" stroke-width="1"/>
-<text x="700.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">120</text>
+<text x="700.0" y="146" font-size="11" fill="#59636e" text-anchor="middle">150</text>
 <text x="110" y="53.5" font-size="13" fill="#1f2328" text-anchor="end">UD-IQ4_XS</text>
-<path d="M120.0,34.0 h400.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-400.1 z" fill="#97c425"/>
-<text x="530.1" y="45" font-size="12" fill="#59636e">83.6</text>
-<path d="M120.0,50.0 h524.8 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-524.8 z" fill="#1b9247"/>
-<text x="654.8" y="61" font-size="12" fill="#59636e">109.4</text>
+<path d="M120.0,34.0 h355.2 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-355.2 z" fill="#97c425"/>
+<text x="485.2" y="45" font-size="12" fill="#59636e">92.9</text>
+<path d="M120.0,50.0 h445.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-445.7 z" fill="#1b9247"/>
+<text x="575.7" y="61" font-size="12" fill="#59636e">116.3</text>
 <text x="110" y="99.5" font-size="13" fill="#1f2328" text-anchor="end">UD-Q4_K_XL</text>
-<path d="M120.0,80.0 h306.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-306.3 z" fill="#97c425"/>
-<text x="436.3" y="91" font-size="12" fill="#59636e">64.2</text>
-<path d="M120.0,96.0 h385.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-385.1 z" fill="#1b9247"/>
-<text x="515.1" y="107" font-size="12" fill="#59636e">80.5</text></svg>
+<path d="M120.0,80.0 h271.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-271.3 z" fill="#97c425"/>
+<text x="401.3" y="91" font-size="12" fill="#59636e">71.2</text>
+<path d="M120.0,96.0 h324.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-324.3 z" fill="#1b9247"/>
+<text x="454.3" y="107" font-size="12" fill="#59636e">84.9</text></svg>

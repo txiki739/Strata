@@ -16,32 +16,32 @@
 <line x1="700.0" y1="52" x2="700.0" y2="338" stroke="#3d444d" stroke-width="1"/>
 <text x="700.0" y="354" font-size="11" fill="#9198a1" text-anchor="middle">200</text>
 <text x="170" y="77.5" font-size="13" fill="#f0f6fc" text-anchor="end">Spanish chat</text>
-<path d="M180.0,58.0 h219.6 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-219.6 z" fill="#79a200"/>
-<text x="409.6" y="69" font-size="12" fill="#9198a1">86.0</text>
-<path d="M180.0,74.0 h294.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-294.7 z" fill="#00762c"/>
-<text x="484.7" y="85" font-size="12" fill="#9198a1">114.9</text>
+<path d="M180.0,58.0 h229.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-229.7 z" fill="#79a200"/>
+<text x="419.7" y="69" font-size="12" fill="#9198a1">89.9</text>
+<path d="M180.0,74.0 h299.4 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-299.4 z" fill="#00762c"/>
+<text x="489.4" y="85" font-size="12" fill="#9198a1">116.7</text>
 <text x="170" y="123.5" font-size="13" fill="#f0f6fc" text-anchor="end">Reasoning</text>
-<path d="M180.0,104.0 h224.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-224.0 z" fill="#79a200"/>
-<text x="414.0" y="115" font-size="12" fill="#9198a1">87.7</text>
-<path d="M180.0,120.0 h290.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-290.3 z" fill="#00762c"/>
-<text x="480.3" y="131" font-size="12" fill="#9198a1">113.2</text>
+<path d="M180.0,104.0 h249.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-249.5 z" fill="#79a200"/>
+<text x="439.5" y="115" font-size="12" fill="#9198a1">97.5</text>
+<path d="M180.0,120.0 h315.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-315.5 z" fill="#00762c"/>
+<text x="505.5" y="131" font-size="12" fill="#9198a1">122.9</text>
 <text x="170" y="169.5" font-size="13" fill="#f0f6fc" text-anchor="end">After an 18K document</text>
-<path d="M180.0,150.0 h177.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-177.7 z" fill="#79a200"/>
-<text x="367.7" y="161" font-size="12" fill="#9198a1">69.9</text>
-<path d="M180.0,166.0 h251.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-251.1 z" fill="#00762c"/>
-<text x="441.1" y="177" font-size="12" fill="#9198a1">98.1</text>
+<path d="M180.0,150.0 h202.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-202.7 z" fill="#79a200"/>
+<text x="392.7" y="161" font-size="12" fill="#9198a1">79.5</text>
+<path d="M180.0,166.0 h260.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-260.7 z" fill="#00762c"/>
+<text x="450.7" y="177" font-size="12" fill="#9198a1">101.8</text>
 <text x="170" y="215.5" font-size="13" fill="#f0f6fc" text-anchor="end">Code</text>
-<path d="M180.0,196.0 h226.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-226.1 z" fill="#79a200"/>
-<text x="416.1" y="207" font-size="12" fill="#9198a1">88.5</text>
-<path d="M180.0,212.0 h304.6 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-304.6 z" fill="#00762c"/>
-<text x="494.6" y="223" font-size="12" fill="#9198a1">118.7</text>
+<path d="M180.0,196.0 h253.7 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-253.7 z" fill="#79a200"/>
+<text x="443.7" y="207" font-size="12" fill="#9198a1">99.1</text>
+<path d="M180.0,212.0 h332.4 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-332.4 z" fill="#00762c"/>
+<text x="522.4" y="223" font-size="12" fill="#9198a1">129.4</text>
 <text x="170" y="261.5" font-size="13" fill="#f0f6fc" text-anchor="end">Edit (3.3K script)</text>
-<path d="M180.0,242.0 h294.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-294.5 z" fill="#79a200"/>
-<text x="484.5" y="253" font-size="12" fill="#9198a1">114.8</text>
-<path d="M180.0,258.0 h425.5 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-425.5 z" fill="#00762c"/>
-<text x="615.5" y="269" font-size="12" fill="#9198a1">165.2</text>
+<path d="M180.0,242.0 h341.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-341.3 z" fill="#79a200"/>
+<text x="531.3" y="253" font-size="12" fill="#9198a1">132.8</text>
+<path d="M180.0,258.0 h472.3 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-472.3 z" fill="#00762c"/>
+<text x="662.3" y="269" font-size="12" fill="#9198a1">183.2</text>
 <text x="170" y="307.5" font-size="13" fill="#f0f6fc" text-anchor="end">After a 5K prompt</text>
-<path d="M180.0,288.0 h161.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-161.1 z" fill="#79a200"/>
-<text x="351.1" y="299" font-size="12" fill="#9198a1">63.5</text>
-<path d="M180.0,304.0 h174.1 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-174.1 z" fill="#00762c"/>
-<text x="364.1" y="315" font-size="12" fill="#9198a1">68.5</text></svg>
+<path d="M180.0,288.0 h178.0 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-178.0 z" fill="#79a200"/>
+<text x="368.0" y="299" font-size="12" fill="#9198a1">70.0</text>
+<path d="M180.0,304.0 h181.6 a4,4 0 0 1 4,4 v6.0 a4,4 0 0 1 -4,4 h-181.6 z" fill="#00762c"/>
+<text x="371.6" y="315" font-size="12" fill="#9198a1">71.4</text></svg>

@@ -22,29 +22,30 @@ GPU = [("one", "RTX 3090"), ("two", "RTX 3090 + RTX 5060 Ti")]
 
 # ---- the measurements (Ryzen 7 5700X, 128 GB DDR4-3200; decode = six-prompt geometric mean, tokens/s) ----
 PROMPTS = ["Spanish chat", "Reasoning", "After an 18K document", "Code", "Edit (3.3K script)", "After a 5K prompt"]
-DECODE = {  # prompt order as PROMPTS; mean of every run of this code and these settings (2-6 per config)
-    "iq4": {"one": [86.0, 87.7, 69.9, 88.5, 114.8, 63.5], "two": [114.9, 113.2, 98.1, 118.7, 165.2, 68.5]},
-    "q4": {"one": [62.5, 69.8, 54.8, 68.1, 87.9, 49.1], "two": [86.1, 81.6, 73.7, 84.6, 118.1, 52.7]},
+DECODE = {  # prompt order as PROMPTS; mean of the two runs of each config with --kv-grow + STRATA_POOL_FUSED=1
+    "iq4": {"one": [89.9, 97.5, 79.5, 99.1, 132.8, 70.0], "two": [116.7, 122.9, 101.8, 129.4, 183.2, 71.4]},
+    "q4": {"one": [70.2, 83.7, 59.3, 74.8, 97.0, 51.7], "two": [88.8, 86.4, 77.9, 89.9, 129.2, 53.8]},
 }
-MEAN = {"iq4": {"one": 83.6, "two": 109.4}, "q4": {"one": 64.2, "two": 80.5}}
+MEAN = {"iq4": {"one": 92.9, "two": 116.3}, "q4": {"one": 71.2, "two": 84.9}}
 PREFILL_LABELS = ["18,076 tokens", "5,296 tokens", "3,340 tokens"]
-PREFILL = {"iq4": {"one": [1787, 1131, 811], "two": [1800, 1461, 1036]},
-           "q4": {"one": [1702, 869, 637], "two": [1716, 1066, 765]}}
+PREFILL = {"iq4": {"one": [1803, 1180, 851], "two": [1836, 1550, 1086]},
+           "q4": {"one": [1730, 899, 660], "two": [1758, 1113, 794]}}
 STEPS = [("eddoursul custom + fixes", 77.3), ("+ IQ4_XS AVX-2 kernel", 78.0), ("+ AVX2 gather (IQ3_S)", 80.9),
          ("+ --adapt-decay 0.92", 83.3),
-         ("+ upstream PRs #863, #851, #606", 83.6)]
+         ("+ upstream PRs #863, #851, #606", 83.6), ("+ elastic K/V (--kv-grow)", 90.9),
+         ("+ fused CPU pool", 92.9)]
 DECAY = [(0.7, 76.8), (0.85, 82.1), (0.92, 83.6), (0.95, 81.0), (0.97, 81.3), (0.99, 70.8)]
 # 64 GB PC emulated on the same machine (the current engine; the 128 GB column is the README's runs): the engine (and its page cache) limited to 60 GiB with a cgroup; UD-Q4_K_XL
 # (71.7 GiB of experts) then reads its experts from the NVMe through --mmap-experts.  None until measured.
 RAM_CATS = ["UD-IQ4_XS · RTX 3090", "UD-IQ4_XS · 3090 + 5060 Ti", "UD-Q4_K_XL · RTX 3090", "UD-Q4_K_XL · 3090 + 5060 Ti"]
-RAM64 = {"128": [83.6, 109.4, 64.2, 80.5],
-         "64": [81.5, 104.7, 21.4, 25.2]}
-DECODE64 = {"iq4": {"one": [83.2, 87.5, 67.8, 85.3, 114.8, 61.0], "two": [95.5, 106.9, 98.0, 119.5, 164.8, 68.0]}, "q4": {"one": [24.0, 24.3, 20.4, 26.2, 32.7, 10.5], "two": [33.0, 36.4, 36.1, 17.6, 65.0, 5.1]}}
-PREFILL64 = {"iq4": {"one": [1619, 1059, 676], "two": [1177, 1287, 1038]}, "q4": {"one": [300, 106, 94], "two": [521, 188, 52]}}
+RAM64 = {"128": [92.9, 116.3, 71.2, 84.9],
+         "64": [92.7, 115.7, 25.9, 39.7]}
+DECODE64 = {"iq4": {"one": [89.8, 97.3, 79.0, 99.2, 132.8, 69.6], "two": [112.4, 120.2, 104.4, 127.7, 183.3, 72.8]}, "q4": {"one": [25.2, 30.5, 19.9, 28.3, 44.2, 15.7], "two": [37.3, 39.7, 32.9, 43.1, 71.3, 26.1]}}
+PREFILL64 = {"iq4": {"one": [1813, 1180, 851], "two": [1833, 1550, 1084]}, "q4": {"one": [438, 162, 147], "two": [491, 213, 157]}}
 # decode right after a long prompt (128 tokens of answer), UD-IQ4_XS: one GPU / two
 LONG_CATS = ["after 32K tokens", "after 64K", "after 120K", "after 200K"]
-LONG_DEC_Q4 = {"one": [51.8, 64.3, 47.4, 45.8], "two": [83.3, 93.3, 68.3, 68.2]}
-LONG_DEC = {"one": [67.0, 87.0, 61.5, 54.9], "two": [92.1, 96.8, 98.9, 97.6]}
+LONG_DEC_Q4 = {"one": [58.6, 77.0, 48.4, 41.6], "two": [83.0, 90.0, 69.8, 74.0]}
+LONG_DEC = {"one": [73.5, 93.6, 66.2, 60.0], "two": [94.7, 99.9, 98.1, 97.3]}
 WORKERS = {"UD-IQ4_XS": [(4, 73.8), (5, 75.7), (6, 81.8), (7, 83.6)], "UD-Q4_K_XL": [(3, 64.8), (4, 64.2), (5, 64.6), (6, 63.7)]}
 
 
@@ -145,7 +146,7 @@ def main():
         charts = {
             "summary": grouped("summary", ["UD-IQ4_XS", "UD-Q4_K_XL"],
                                [(k, s, [MEAN["iq4"][k], MEAN["q4"][k]]) for k, s in GPU],
-                               "Decode speed, six-prompt mean: one GPU or two", t, lab_w=120),
+                               "Decode speed, six-prompt mean: one GPU or two", t, lab_w=120, vmax=135),
             "decode-iq4xs": grouped("d", PROMPTS, [(k, s, DECODE["iq4"][k]) for k, s in GPU],
                                     "UD-IQ4_XS decode speed per prompt", t, title="UD-IQ4_XS · decode per prompt (tokens/s)"),
             "decode-q4kxl": grouped("d", PROMPTS, [(k, s, DECODE["q4"][k]) for k, s in GPU],
@@ -176,13 +177,13 @@ def main():
         for m, nm in (("iq4", "UD-IQ4_XS"), ("q4", "UD-Q4_K_XL")):
             charts[f"decode-{'iq4xs' if m == 'iq4' else 'q4kxl'}-64"] = grouped(
                 "d", PROMPTS, [(k, s, DECODE64[m][k]) for k, s in GPU], f"{nm} decode per prompt with 64 GB of RAM", t,
-                vmax=max(DECODE["iq4"]["two"]), title=f"{nm} · decode per prompt, 64 GB of RAM (tokens/s)")
+                vmax=max(DECODE["iq4"]["two"] + DECODE64["iq4"]["two"]), title=f"{nm} · decode per prompt, 64 GB of RAM (tokens/s)")
             charts[f"prefill-{'iq4xs' if m == 'iq4' else 'q4kxl'}-64"] = grouped(
                 "p", PREFILL_LABELS, [(k, s, PREFILL64[m][k]) for k, s in GPU], f"{nm} prompt reading with 64 GB of RAM", t,
                 vmax=max(PREFILL["iq4"]["two"]), dec=0, lab_w=120, title=f"{nm} · prompt reading, 64 GB of RAM (tokens/s)")
         if RAM64:
             charts["ram64"] = grouped("r", RAM_CATS, [("r128", "128 GB", RAM64["128"]), ("r64", "64 GB", RAM64["64"])],
-                                      "Decode speed with 128 GB and with 64 GB of RAM", t, lab_w=210)
+                                      "Decode speed with 128 GB and with 64 GB of RAM", t, lab_w=210, vmax=135)
         for name, text in charts.items():
             (OUT / f"{name}-{mode}.svg").write_text(text, encoding="utf-8")
     print("charts written to", OUT)
