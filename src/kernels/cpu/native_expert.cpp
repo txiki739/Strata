@@ -156,7 +156,13 @@ void native_down_rows(const NativeFmt& f, const uint8_t* blob, const void* const
     // IQ4_NL down rows: the AVX-2 multi-token kernel decodes the nibbles and absolutises the weights once per
     // block instead of once per token; ggml-cpu's dot is single-token.  STRATA_NO_IQ4NL falls back to it.
     static const bool iq4nl_mt = std::getenv("STRATA_NO_IQ4NL") == nullptr;
-    static const int mt_min = [] { const char* e = std::getenv("STRATA_IQ_MT_MIN"); return e ? std::atoi(e) : 2; }();
+    // STRATA_IQ_DOWN_MT_MIN (opt-in) sets the down rows' rule apart from the gate/up rows': on a 5700X ggml's
+    // one-token IQ4_NL dot (0.075 ms an expert) beats the multi-token kernel at one token (0.089).
+    static const int mt_min = [] {
+        const char* d = std::getenv("STRATA_IQ_DOWN_MT_MIN");
+        const char* e = d ? d : std::getenv("STRATA_IQ_MT_MIN");
+        return e ? std::atoi(e) : 2;
+    }();
     if (nt >= mt_min && f.d_type == 20 && iq4nl_mt) {   // #152: the same rule as the gate/up rows
         iq4nl256_down_rows(blob + f.down_off, f.d_row, (int) f.n_ff, hq, nt, out, r0, r1);
         return;
