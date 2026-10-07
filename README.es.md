@@ -277,7 +277,7 @@ Las cuatro configuraciones y los pasos para compilar y arrancarlas en Linux: [ex
 ### El servidor
 
 El `serve/server.py` de este repositorio es el de eddoursul. Aquí el motor lo sirve **el servidor de Niko1221/Strata**
-(su `main`, probado en `82f46a8`), que funciona con este motor tal cual y corrige dos cosas que el anterior hace mal:
+(su `main`, probado en `v0.1.40.3`), que funciona con este motor tal cual y corrige dos cosas que el anterior hace mal:
 
 - un mensaje con el texto de un token de control (`<|im_end|>`, `<|im_start|>`, `<think>`...) se codifica como texto:
   un agente que lee un fichero que los contiene ya no corta ahí su turno, y un documento no puede colar un turno de
