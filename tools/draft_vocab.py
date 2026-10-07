@@ -17,12 +17,17 @@ for example the model's own answers to a set of prompts), --add-text plain text 
 at least --min-count times that the subset lacks are added:
 
     python tools/draft_vocab.py --gguf <model>-00001-of-0000N.gguf --base data/draft_vocab.bin \
-        --add-corpus ../Strata-data/corpus-es/ids.txt --min-count 1 --add-latin-words --out data/draft_vocab_es.bin
+        --add-text <the 10 articles> --min-count 2 --out data/draft_vocab_es.bin
 
-A corpus only covers its own topics (the sky's colours were missing from a 28K-token one), so --add-latin-words adds
-every whole lowercase word token of a-z and á é í ó ú ñ ü (an optional leading space; ~51K ids) as well.  Measured
-on an RTX 3090 with UD-Q4_K_XL: Spanish prose drafts went from 45% to 66% accepted
-and decoded +20%, English and code 0..+5%, from a head of 95K ids instead of 40.5K (+141 MiB of draft head in VRAM).
+The shipped data/draft_vocab_es.bin is built that way from 10 Spanish Wikipedia articles (España, Madrid, Miguel de
+Cervantes, Idioma español, Unión Europea, Literatura española, Gastronomía de España, Economía de España, Guerra civil
+española, Segunda Guerra Mundial; 326,738 tokens): 47,196 ids (+6,671), the same file as Niko1221/Strata#1186 (upstream's
+--corpus --coverage 0.99 picks the same tokens on this corpus).  Measured on an RTX 3090 with UD-IQ4_XS, three Spanish
+prompts x 2 rounds: drafts 68.4% -> 74.8% accepted, decode 85.0 -> 90.4 tok/s.
+
+--add-corpus with --min-count 1 and --add-latin-words (every whole lowercase word token of a-z and á é í ó ú ñ ü, an
+optional leading space; ~51K ids) built the subset shipped before, 94,962 ids from the model's own answers: the same
+acceptance (75.1%, 89.5 tok/s) with twice the draft head in VRAM.
 """
 from __future__ import annotations
 

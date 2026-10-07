@@ -214,7 +214,8 @@ part of #2);
 core on Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); the engine exiting right after `QUIT`
 ([#7](https://github.com/eddoursul/Strata/pull/7)); the Spanish draft vocabulary
 ([#8](https://github.com/eddoursul/Strata/pull/8); for upstream too, built with its own tool:
-[Niko1221/Strata#1186](https://github.com/Niko1221/Strata/pull/1186)).
+[Niko1221/Strata#1186](https://github.com/Niko1221/Strata/pull/1186), the file shipped here now: half the ids, the same
+acceptance).
 
 ### Later additions (from upstream's open pull requests)
 

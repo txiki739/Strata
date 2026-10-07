@@ -31,6 +31,9 @@ keeps the most used ones in VRAM (an adaptive cache); the CPU computes the rest.
 
 Both: 200,192 tokens of context, int8 KV cache, the MTP draft layer with a Spanish draft vocabulary
 (`data/draft_vocab_es.bin`) plus prompt lookup, greedy verification (the speculation never changes the output).
+These figures were measured with the 94,962-id Spanish subset shipped before; the 47,196-id one shipped now
+measured the same on UD-IQ4_XS (74.8% vs 75.1% of the Spanish drafts accepted, 90.4 vs 89.5 tok/s) with half the
+draft head.
 
 ## Settings
 

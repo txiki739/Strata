@@ -94,7 +94,8 @@ every group: the answer then no longer depends on the drafting. Measured on a Ry
 vocabulary (`mtp/rt/draft_vocab.bin`). This fork keeps the English/code subset (40,525 ids, `data/draft_vocab.bin`,
 the same file as upstream's `--draft-vocab en`). Upstream's default since 0.1.27 adds every Chinese, Japanese and
 Korean token (106,299 ids): answers in those languages 15-38% faster, English answers 1-2% slower, and its head takes
-~110 MiB more VRAM. `tools/draft_vocab.py` builds and inspects subsets.
+~110 MiB more VRAM. `data/draft_vocab_es.bin` adds the tokens of Spanish text (47,196 ids; the example configs in
+`examples/r7-5700x` use it): Spanish drafts 68% -> 75% accepted. `tools/draft_vocab.py` builds and inspects subsets.
 
 **Low-RAM mode (engine 0.1.26, chosen by setup):** normally all of a model's experts are copied into RAM (23-50 GB,
 pinned) and the GPU holds a copy of the most-used ones. On a PC whose RAM cannot hold them beside the system (the

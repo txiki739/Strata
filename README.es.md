@@ -217,7 +217,8 @@ más workers (ya forma parte del #2); `--mmap-experts` con packs nativos ([#5](h
 núcleo físico en Linux ([#6](https://github.com/eddoursul/Strata/pull/6)); que el motor salga en cuanto recibe `QUIT`
 ([#7](https://github.com/eddoursul/Strata/pull/7)); el vocabulario de borrador en español
 ([#8](https://github.com/eddoursul/Strata/pull/8); también al original, hecho con su propia herramienta:
-[Niko1221/Strata#1186](https://github.com/Niko1221/Strata/pull/1186)).
+[Niko1221/Strata#1186](https://github.com/Niko1221/Strata/pull/1186), el archivo que se publica ahora aquí: la mitad de
+ids, la misma aceptación).
 
 ### Añadidos posteriores (de pull requests abiertos del motor original)
 

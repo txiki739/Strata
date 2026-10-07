@@ -31,6 +31,9 @@ en VRAM los más usados (una caché adaptativa); la CPU calcula el resto.
 
 En los dos: 200.192 tokens de contexto, caché KV int8, la capa de borrador MTP con vocabulario español
 (`data/draft_vocab_es.bin`) y búsqueda en el prompt, verificación greedy (la especulación nunca cambia la salida).
+Estas cifras se midieron con el subconjunto español de 94.962 ids que se publicaba antes; el de 47.196 ids que se
+publica ahora midió lo mismo con UD-IQ4_XS (74,8 % frente a 75,1 % de borradores en español aceptados, 90,4 frente a
+89,5 tok/s) con la mitad de cabeza de borrador.
 
 ## Ajustes
 
