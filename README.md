@@ -280,7 +280,7 @@ The four configs and the steps to build and run them on Linux: [examples/r7-5700
 ### The server
 
 This repo's `serve/server.py` is eddoursul's. Here the engine is served by **Niko1221/Strata's server** (its `main`,
-tested at `v0.1.40.3`), which runs this engine as it is and fixes two things the older one gets wrong:
+tested at `v0.1.41`), which runs this engine as it is and fixes two things the older one gets wrong:
 
 - a message holding the text of a control token (`<|im_end|>`, `<|im_start|>`, `<think>`...) is encoded as text: an
   agent that reads a file with them no longer ends its turn there, and a document cannot forge a system turn (#931);
