@@ -243,6 +243,14 @@ ids, la misma aceptación).
   `--mmap-experts` queda apagada, como en el original.
 - **Las subidas de la tabla de residencia esperan a su copia** (#1001 del original): una carrera rara podía hacer que
   un experto lo calcularan la GPU y la CPU a la vez, o ninguna.
+- **Un arranque más rápido en Linux** (a partir de he-be/Strata 32f8912, de masahiro hibi): `cudaHostAlloc` ponía a
+  cero y fijaba en memoria los 55 GiB de expertos en un solo hilo antes de leerlos (~16 s). Ahora la zona es memoria
+  normal que los hilos de la carga llenan con `preadv`, directamente en el sitio de cada experto (sin copia
+  intermedia), y cada capa se fija con `cudaHostRegister` en cuanto se ha leído. UD-IQ4_XS en la RTX 3090 está lista
+  en 38-43 s desde el disco (antes 52-55 s) y en 14-17 s con el GGUF en la caché de páginas (33-50 s); con las dos
+  tarjetas, 22-24 s (50-53 s); con 64 GB, 38-40 s (55 s), sin pasar nada a swap; y se cierra en 2 s (6 s). Los mismos
+  bytes (`STRATA_LOAD_VERIFY=1` vuelve a leer cada experto y lo compara con el fichero), los mismos tokens y la misma
+  velocidad. `STRATA_PIN_AFTER_COPY=0` vuelve al camino anterior.
 - Probado y descartado: el decodificado escalar de IQ3_S del PR #930 del original (mismos bits y un 14 % más rápido en
   un hilo con un token, pero nada en el motor: con ocho hilos manda la RAM; sus interruptores quedan, apagados),
   `--no-second-gpu-adapt` de guthirry (sin cambio) y las cachés K/V de 4 bits (`k8v4`, `q4_0`: pierden algo de

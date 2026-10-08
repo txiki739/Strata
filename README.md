@@ -239,6 +239,14 @@ acceptance).
   buffers grow with the experts the cache does not hold). It stays off with `--mmap-experts`, as upstream's.
 - **The residency table's uploads wait for their copy** (upstream #1001): a rare race could have one expert computed
   by both the GPU and the CPU, or by neither.
+- **A faster start on Linux** (after he-be/Strata 32f8912 by masahiro hibi): `cudaHostAlloc` zeroed and page-locked
+  the experts' 55 GiB on one thread before reading them (~16 s). Now the arena is plain memory the load's threads fill
+  with `preadv`, straight into each expert's place (no staging copy), and every layer is page-locked with
+  `cudaHostRegister` as soon as it is read. UD-IQ4_XS on the RTX 3090 is ready in 38-43 s from the disk (52-55 s
+  before) and in 14-17 s with the GGUF in the page cache (33-50 s); with both cards 22-24 s (50-53 s); with 64 GB
+  38-40 s (55 s), nothing swapped out; it exits in 2 s (6 s). The same bytes (`STRATA_LOAD_VERIFY=1` reads every
+  expert again and compares it with the file), the same tokens, the same speed. `STRATA_PIN_AFTER_COPY=0` is the old
+  path.
 - Tried and left out: the faster scalar IQ3_S decode of upstream PR #930 (bit-exact and 14% faster on one thread at
   one token, but no faster in the engine: eight threads are bound by the RAM; its switches stay, off), guthirry's
   `--no-second-gpu-adapt` (no change), and the 4-bit K/V caches (`k8v4`, `q4_0`: they lose some accuracy).
