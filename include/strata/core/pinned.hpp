@@ -15,6 +15,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <vector>
 
@@ -64,9 +65,10 @@ LoadStats load_experts(const std::string& path, uint8_t* dst, uint64_t blob_byte
                        uint64_t layers, int threads, uint64_t chunk);
 /// Plan v0.3 P6: the same with one byte range per layer (`layer_off[L]`, `layer_bytes[L]`).
 /// Layer L's `layer_bytes[L]` bytes at file offset `layer_off[L]` go to `layer_dst[L]`.
+/// `done(L)`, when given, runs on the reading thread once layer L is in place.
 LoadStats load_experts_ranges(const std::string& path, const std::vector<uint8_t*>& layer_dst,
                               const std::vector<uint64_t>& layer_off, const std::vector<uint64_t>& layer_bytes, int threads,
-                              uint64_t chunk);
+                              uint64_t chunk, const std::function<void(uint64_t)>& done = nullptr);
 LoadStats load_experts_ranges(const std::string& path, uint8_t* dst, const std::vector<uint64_t>& layer_off,
                               const std::vector<uint64_t>& layer_bytes, int threads, uint64_t chunk);
 

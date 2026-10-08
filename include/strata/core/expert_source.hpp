@@ -390,6 +390,15 @@ private:
     std::vector<uint8_t*> blocks_;           ///< the pinned blocks, owned (layers [0, blocks_.size()))
     void* tail_ = nullptr;                   ///< the layers past the pinning budget, locked resident, owned
     uint64_t tail_bytes_ = 0;
+    /// Linux (STRATA_PIN_AFTER_COPY, default on): the arena as one anonymous range the load's threads write into,
+    /// each layer page-locked with cudaHostRegister after the load (cudaHostAlloc zeroes and locks it on one thread
+    /// first: ~16 s for 55 GiB).  The layers past the first refused registration are locked resident instead.
+    void* anon_ = nullptr;
+    uint64_t anon_bytes_ = 0;
+    std::vector<std::pair<uint8_t*, uint64_t>> registered_;
+    uint8_t* anon_lock_ = nullptr;
+    uint64_t anon_lock_bytes_ = 0;
+    int64_t pinned_layers_ = 0;              ///< layers [0, pinned_layers_) are page-locked and mapped
     int64_t blobs_ = 0;
     int64_t n_expert_ = 0;
     int64_t reads_ = 0;

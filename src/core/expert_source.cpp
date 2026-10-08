@@ -19,6 +19,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <thread>
 #include <vector>
 
@@ -29,6 +30,7 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <unistd.h>
 #endif
 
@@ -723,12 +725,73 @@ bool locate_experts_gguf(const std::vector<std::string>& shards, const strata::k
 
 LoadStats load_experts_gguf(const std::vector<std::string>& shards, const std::vector<GgufSpan>& spans,
                             const std::vector<uint8_t*>& layer_base, const strata::kernels::cpu::ExpertLayout& lay,
-                            int threads) {
+                            int threads, const std::function<void(int64_t)>& done = nullptr) {
     LoadStats st;
     st.layers = (uint64_t) lay.n_layers;
     const auto t0 = std::chrono::steady_clock::now();
     std::atomic<int64_t> next{0};
     std::atomic<bool> bad{false};
+#if !defined(_WIN32)
+    // Linux: a role tensor's slices read with preadv straight into their places in the blobs, STRATA_LOAD_BATCH
+    // experts (16) a call - one large forward read, as the staged copy made, without the staging buffer and its copy
+    static const int batch = [] {
+        const char* v = std::getenv("STRATA_LOAD_BATCH");
+        return v != nullptr && std::atoi(v) > 0 ? std::min(std::atoi(v), 512) : 16;
+    }();
+    auto worker = [&]() {
+        std::vector<int> fds(shards.size(), -1);
+        std::vector<struct iovec> iov((size_t) batch);
+        // reads `n` iovecs from `at`, a short read resumed where it stopped
+        auto read_all = [](int fd, struct iovec* v, int n, uint64_t at) {
+            while (n > 0) {
+                const ssize_t r = ::preadv(fd, v, n, (off_t) at);
+                if (r <= 0) return false;
+                at += (uint64_t) r;
+                for (size_t left = (size_t) r; left > 0 && n > 0;) {
+                    if (left >= v->iov_len) {
+                        left -= v->iov_len;
+                        ++v;
+                        --n;
+                    } else {
+                        v->iov_base = (uint8_t*) v->iov_base + left;
+                        v->iov_len -= left;
+                        left = 0;
+                    }
+                }
+            }
+            return true;
+        };
+        for (;;) {
+            const int64_t l = next.fetch_add(1);
+            if (l >= lay.n_layers || bad) break;
+            const auto& fm = lay.fmt[(size_t) l];
+            const uint64_t blob = lay.bytes[(size_t) l];
+            const uint64_t per[3] = {fm.up_off, fm.up_off, blob - fm.down_off};
+            const uint64_t at[3] = {0, fm.up_off, fm.down_off};
+            for (int r = 0; r < 3 && !bad; ++r) {
+                const GgufSpan& sp = spans[(size_t) (3 * l + r)];
+                int& fd = fds[sp.shard];
+                if (fd < 0) {
+                    fd = ::open(shards[sp.shard].c_str(), O_RDONLY | O_CLOEXEC);
+                    if (fd >= 0) (void) posix_fadvise(fd, 0, 0, POSIX_FADV_SEQUENTIAL);
+                }
+                if (fd < 0) { bad = true; break; }
+                for (int64_t e0 = 0; e0 < lay.n_expert; e0 += batch) {
+                    const int n = (int) std::min<int64_t>(batch, lay.n_expert - e0);
+                    for (int k = 0; k < n; ++k)
+                        iov[(size_t) k] = {layer_base[(size_t) l] + (uint64_t) (e0 + k) * blob + at[r], (size_t) per[r]};
+                    if (!read_all(fd, iov.data(), n, sp.offset + (uint64_t) e0 * per[r])) {
+                        bad = true;
+                        break;
+                    }
+                }
+            }
+            if (!bad && done) done(l);
+        }
+        for (int fd : fds)
+            if (fd >= 0) ::close(fd);
+    };
+#else
     auto worker = [&]() {
         std::vector<std::ifstream> files(shards.size());
         std::vector<uint8_t> buf;
@@ -759,8 +822,10 @@ LoadStats load_experts_gguf(const std::vector<std::string>& shards, const std::v
                     }
                 }
             }
+            if (done) done(l);
         }
     };
+#endif
     std::vector<std::thread> pool;
     for (int i = 1; i < threads; ++i) pool.emplace_back(worker);
     worker();
@@ -842,7 +907,31 @@ bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int6
     }
     uint64_t pinned_total = 0;
     std::string tail_note;
-    for (int64_t l = 0; l < n_layers; ++l) {
+    bool anon = false;
+#if !defined(_WIN32)
+    // STRATA_PIN_AFTER_COPY=0 keeps the cudaHostAlloc blocks (the A/B arm)
+    static const bool pin_after = [] {
+        const char* v = std::getenv("STRATA_PIN_AFTER_COPY");
+        return v == nullptr || std::atoi(v) != 0;
+    }();
+    if (pin_after) {
+        constexpr uint64_t kAlign = 2ull << 20;   // every layer on pages of its own: each one registers alone
+        std::vector<uint64_t> at;
+        uint64_t total = 0;
+        for (int64_t l = 0; l < n_layers; ++l) {
+            at.push_back(total);
+            total += (room[(size_t) l] + kAlign - 1) / kAlign * kAlign;
+        }
+        void* m = mmap(nullptr, (size_t) total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        if (m != MAP_FAILED) {
+            anon_ = m;
+            anon_bytes_ = total;
+            anon = true;
+            for (int64_t l = 0; l < n_layers; ++l) layer_base_.push_back((uint8_t*) m + at[(size_t) l]);
+        }
+    }
+#endif
+    for (int64_t l = 0; !anon && l < n_layers; ++l) {
         void* p = nullptr;
         if (cudaHostAlloc(&p, (size_t) room[(size_t) l], cudaHostAllocPortable | cudaHostAllocMapped) != cudaSuccess) {
             (void) cudaGetLastError();
@@ -869,16 +958,94 @@ bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int6
         (void) cudaGetLastError();
         pinned_total += room[(size_t) l];
     }
-    const LoadStats st = from_gguf ? load_experts_gguf(gguf_, spans, layer_base_, lay, threads)
-                                   : load_experts_ranges(path, layer_base_, loff, lbytes, threads, /*chunk=*/8u << 20);
+    if (!anon) pinned_layers_ = (int64_t) blocks_.size();
+    if (const char* v = std::getenv("STRATA_LOAD_THREADS"); v != nullptr && std::atoi(v) > 0) threads = std::atoi(v);
+    // the anonymous arena: each layer page-locked by the thread that read it, as soon as it is in place (the
+    // registrations overlap the other layers' reads, and the pages are not left to the swap meanwhile)
+    std::vector<char> reg_ok((size_t) n_layers, 0);
+    int dev = 0;
+    (void) cudaGetDevice(&dev);
+    auto on_layer = [&](int64_t l) {
+        if (!anon) return;
+        (void) cudaSetDevice(dev);
+        if (cudaHostRegister(layer_base_[(size_t) l], (size_t) room[(size_t) l],
+                             cudaHostRegisterMapped | cudaHostRegisterPortable) == cudaSuccess)
+            reg_ok[(size_t) l] = 1;
+        else
+            (void) cudaGetLastError();
+    };
+    const LoadStats st =
+        from_gguf ? load_experts_gguf(gguf_, spans, layer_base_, lay, threads, on_layer)
+                  : load_experts_ranges(path, layer_base_, loff, lbytes, threads, /*chunk=*/8u << 20,
+                                        [&](uint64_t l) { on_layer((int64_t) l); });
     if (st.bytes != want) {
+        for (int64_t l = 0; l < n_layers; ++l)
+            if (reg_ok[(size_t) l]) (void) cudaHostUnregister(layer_base_[(size_t) l]);
         close();
         err = "ArenaExpertSource: the load read " + std::to_string(st.bytes) + " B of " + std::to_string(want);
         return false;
     }
-    note_ = std::to_string(blocks_.size()) + " of " + std::to_string(n_layers) + " layers pinned (" +
-            std::to_string(pinned_total >> 30) + " GiB, a cudaHostAlloc block each)";
-    if (tail_ != nullptr) note_ += "; the others pageable: " + tail_note;
+#if !defined(_WIN32)
+    if (anon) {   // the registered layers up to the first refused one; from there on, locked resident instead
+        int64_t l = 0;
+        while (l < n_layers && reg_ok[(size_t) l]) ++l;
+        for (int64_t m = l + 1; m < n_layers; ++m)
+            if (reg_ok[(size_t) m]) (void) cudaHostUnregister(layer_base_[(size_t) m]);
+        for (int64_t k = 0; k < l; ++k) {
+            uint8_t* p = layer_base_[(size_t) k];
+            registered_.push_back({p, room[(size_t) k]});
+            void* d = nullptr;
+            layer_dev_.push_back(cudaHostGetDevicePointer(&d, p, 0) == cudaSuccess ? (const uint8_t*) d : nullptr);
+            (void) cudaGetLastError();
+            pinned_total += room[(size_t) k];
+        }
+        pinned_layers_ = l;
+        for (int64_t m = l; m < n_layers; ++m) layer_dev_.push_back(nullptr);
+        if (l < n_layers) {
+            anon_lock_ = layer_base_[(size_t) l];
+            anon_lock_bytes_ = (uint64_t) ((uint8_t*) anon_ + anon_bytes_ - anon_lock_);
+            tail_note = strata::platform::lock_resident(anon_lock_, anon_lock_bytes_).note;
+        }
+    }
+#endif
+    // STRATA_LOAD_VERIFY=1: every blob read again through std::ifstream (not the load's own reads) and compared
+    // with the arena's bytes - a test, a minute or two
+    if (const char* v = std::getenv("STRATA_LOAD_VERIFY"); v != nullptr && std::atoi(v) != 0) {
+        std::vector<uint8_t> want_b;
+        int64_t checked = 0;
+        for (int64_t l = 0; l < n_layers; ++l) {
+            const uint64_t b = lay.blob_bytes(l);
+            for (int64_t e = 0; e < n_expert; ++e) {
+                want_b.assign((size_t) b, 0);
+                if (from_gguf) {
+                    const auto& fm = lay.fmt[(size_t) l];
+                    const uint64_t per[3] = {fm.up_off, fm.up_off, b - fm.down_off};
+                    const uint64_t at[3] = {0, fm.up_off, fm.down_off};
+                    for (int r = 0; r < 3; ++r) {
+                        const GgufSpan& sp = spans[(size_t) (3 * l + r)];
+                        std::ifstream f(gguf_[sp.shard], std::ios::binary);
+                        f.seekg((std::streamoff) (sp.offset + (uint64_t) e * per[r]));
+                        f.read((char*) want_b.data() + at[r], (std::streamsize) per[r]);
+                    }
+                } else {
+                    std::ifstream f(path, std::ios::binary);
+                    f.seekg((std::streamoff) (loff[(size_t) l] + (uint64_t) e * b));
+                    f.read((char*) want_b.data(), (std::streamsize) b);
+                }
+                if (std::memcmp(want_b.data(), layer_base_[(size_t) l] + (uint64_t) e * b, (size_t) b) != 0) {
+                    close();
+                    err = "ArenaExpertSource: STRATA_LOAD_VERIFY: layer " + std::to_string(l) + " expert " +
+                          std::to_string(e) + " differs from the file";
+                    return false;
+                }
+                ++checked;
+            }
+        }
+        std::fprintf(stderr, "ArenaExpertSource: STRATA_LOAD_VERIFY: %lld blobs equal to the file\n", (long long) checked);
+    }
+    note_ = std::to_string(pinned_layers_) + " of " + std::to_string(n_layers) + " layers pinned (" +
+            std::to_string(pinned_total >> 30) + (anon ? " GiB, page-locked as each layer loaded)" : " GiB, a cudaHostAlloc block each)");
+    if (tail_ != nullptr || anon_lock_ != nullptr) note_ += "; the others pageable: " + tail_note;
     blobs_ = n_layers * n_expert;
     n_expert_ = n_expert;
     reads_ = 0;
@@ -889,6 +1056,21 @@ bool ArenaExpertSource::open(const std::string& pack_dir, int64_t n_layers, int6
 void ArenaExpertSource::close() {
     for (uint8_t* p : blocks_) cudaFreeHost(p);
     blocks_.clear();
+#if !defined(_WIN32)
+    for (const auto& r : registered_) (void) cudaHostUnregister(r.first);
+    registered_.clear();
+    if (anon_lock_ != nullptr) {
+        strata::platform::unlock_resident(anon_lock_, anon_lock_bytes_);
+        anon_lock_ = nullptr;
+        anon_lock_bytes_ = 0;
+    }
+    if (anon_ != nullptr) {
+        munmap(anon_, (size_t) anon_bytes_);
+        anon_ = nullptr;
+        anon_bytes_ = 0;
+    }
+#endif
+    pinned_layers_ = 0;
     if (tail_ != nullptr) {
         strata::platform::unlock_resident(tail_, tail_bytes_);
         release_pageable(tail_, tail_bytes_);
@@ -902,7 +1084,7 @@ void ArenaExpertSource::close() {
 }
 
 bool ArenaExpertSource::pinned(int64_t layer, int64_t expert) const {
-    return layer >= 0 && layer < (int64_t) blocks_.size() && expert >= 0 && expert < n_expert_;
+    return layer >= 0 && layer < pinned_layers_ && expert >= 0 && expert < n_expert_;
 }
 
 const uint8_t* ArenaExpertSource::device_alias(int64_t layer, int64_t expert) const {

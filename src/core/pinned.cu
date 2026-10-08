@@ -199,7 +199,7 @@ LoadStats load_experts_ranges(const std::string& path, uint8_t* dst, const std::
 
 LoadStats load_experts_ranges(const std::string& path, const std::vector<uint8_t*>& layer_dst,
                               const std::vector<uint64_t>& layer_off, const std::vector<uint64_t>& layer_bytes, int threads,
-                              uint64_t chunk) {
+                              uint64_t chunk, const std::function<void(uint64_t)>& done) {
     LoadStats st;
     const uint64_t layers = (uint64_t) layer_off.size();
     st.layers = layers;
@@ -245,6 +245,7 @@ LoadStats load_experts_ranges(const std::string& path, const std::vector<uint8_t
                 remaining -= n;
             }
             layer_hash[(size_t) L] = h;
+            if (done) done(L);
         }
     };
 
