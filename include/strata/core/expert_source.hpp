@@ -61,6 +61,9 @@ public:
     virtual void begin_layer(int64_t layer, const int32_t* ids, int64_t k) { (void) layer; (void) ids; (void) k; }
     /// Plan v0.3 P6: the DEVICE address of a pinned, mapped blob (the GPU can read it over PCIe), or null.
     virtual const uint8_t* device_alias(int64_t layer, int64_t expert) const { (void) layer; (void) expert; return nullptr; }
+    /// Whether `layer`'s blobs in RAM have device aliases (the PCIe share can read them).  Not device_alias(layer, 0):
+    /// that expert may live only in VRAM.
+    virtual bool layer_mapped(int64_t layer) const { return device_alias(layer, 0) != nullptr; }
 
     /// Whether `blob(layer, expert)` exists.  False for an expert that lives only in VRAM (--vram-pin-gib): a GPU
     /// holds it for good and computes it, so no path may ask the RAM for it.
@@ -386,6 +389,9 @@ public:
     int64_t reads() const { return reads_; }
     bool pinned(int64_t layer, int64_t expert) const override;
     const uint8_t* device_alias(int64_t layer, int64_t expert) const override;
+    bool layer_mapped(int64_t layer) const override {
+        return layer >= 0 && layer < pinned_layers_ && layer_dev_[(size_t) layer] != nullptr;
+    }
     bool in_ram(int64_t layer, int64_t expert) const override {
         return idx_.empty() || idx_[(size_t) (layer * n_expert_ + expert)] >= 0;
     }

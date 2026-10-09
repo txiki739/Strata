@@ -1568,9 +1568,13 @@ int main(int argc, char** argv) {
         }
         mtp.set_max_drafts(o.spec - 1);
     }
-    // --ple-io ram: the table goes into RAM once the SSD has delivered the experts and the draft layer
-    if (ple_table.is_open() && !ple_table.start_ram_load(err))
-        std::fprintf(stderr, "strata generate: %s; its rows stay on the SSD\n", err.c_str());
+    // --ple-io ram: the table goes into RAM once the SSD has delivered the experts and the draft layer (with pinned
+    // experts the arena loads later, before the cache's fill: the table follows it there)
+    auto start_ple_ram = [&]() {
+        if (ple_table.is_open() && !ple_table.start_ram_load(err))
+            std::fprintf(stderr, "strata generate: %s; its rows stay on the SSD\n", err.c_str());
+    };
+    if (!pinning) start_ple_ram();
     // where the host loop and the pool's workers run, moved off the processors that take interrupts as generation
     // goes (drive_window); with a second GPU, whose work raises most of them, the first core starts free
     strata::kernels::cpu::CorePlacement placement(/*spare_first=*/o.second_gpu >= 0);
@@ -1781,6 +1785,7 @@ int main(int argc, char** argv) {
                              "hottest, of %zu), %zu (%.2f GiB) only in the second GPU's; the RAM holds the others\n",
                      pin1.size(), (double) b1 / 1073741824.0, n_main, pin2.size(), (double) b2 / 1073741824.0);
         if (!load_experts()) return 1;
+        start_ple_ram();
     }
     int64_t prefilled = 0;
     if (!profile.empty() && srcp != nullptr) {
@@ -2616,6 +2621,7 @@ int main(int argc, char** argv) {
         if (!o.no_prefill_borrow && d_res != nullptr && o.expert_cache > 0) {
             SlotLoan probe;
             probe.cache = &xcache;
+            probe.keep = (int64_t) pin1.size();   // the pinned slots are never lent
             int64_t chunk = o.prefill_chunk;
             while (chunk > 256 && !probe.plan(strata::prefill::Prefill::bytes_needed(g, ss, chunk, off))) chunk /= 2;
             if (chunk != o.prefill_chunk && probe.plan(strata::prefill::Prefill::bytes_needed(g, ss, chunk, off))) {
@@ -2796,13 +2802,13 @@ int main(int argc, char** argv) {
             kvg.floor = std::max<int64_t>(kvg.floor, (int64_t) pin1.size());   // the pinned slots stay with their experts
             kvg.on = strata::core::qsa_kv_elastic() && xcache.vmm_range() != nullptr && d_res != nullptr &&
                      !host_res.empty() && srcp != nullptr && top >= kvg.floor;
-            if (!pin1.empty() && strata::core::qsa_kv_elastic()) {
+            if (!pin1.empty() && kvg.on) {
                 // the whole context's K/V must fit between the pinned slots and the loan's
                 const uint64_t G = strata::core::vmm_granularity();
-                const int64_t c0 = kvg.on ? (int64_t) ((xcache.slot_offset(kvg.floor) + G - 1) / G) : 0;
-                const int64_t c1 = kvg.on ? (int64_t) (xcache.slot_offset(top) / G) : 0;
+                const int64_t c0 = (int64_t) ((xcache.slot_offset(kvg.floor) + G - 1) / G);
+                const int64_t c1 = (int64_t) (xcache.slot_offset(top) / G);
                 const int64_t need = strata::core::qsa_kv_elastic_need(o.max_context + 64);
-                if (!kvg.on || c1 - c0 < need) {
+                if (c1 - c0 < need) {
                     std::fprintf(stderr, "strata serve: the elastic K/V needs %.2f GiB of the main GPU's cache for the "
                                          "whole context and --vram-pin-gib leaves it %.2f: lower it by %.2f (or "
                                          "--max-context)\n", (double) need * (double) G / 1073741824.0,

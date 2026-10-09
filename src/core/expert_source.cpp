@@ -361,7 +361,7 @@ void expert_pool_dispatch_multi(ExpertDispatch& d, const float* x_f, const int32
         const int32_t e = ids[distinct[q]];
         if (e >= 0 && e < d.n_expert && !in_vram(e) && !on_gpu2_now(e)) ++nmiss;
     }
-    const bool pcie_ok = P != nullptr && d.pcie_num > 0 && d.src->device_alias(d.layers, 0) != nullptr;
+    const bool pcie_ok = P != nullptr && d.pcie_num > 0 && d.src->layer_mapped(d.layers);
     const int m = pcie_ok ? (nmiss * d.pcie_num) >> 8 : 0;
     int miss_rank = 0, fetches = 0;
     const uint8_t* dma_src[64];

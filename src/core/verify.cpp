@@ -830,7 +830,7 @@ bool Verifier::record_window(int T, cudaStream_t cs, std::string& err) {
                 ra.rr_lo = route_resident_cfg().lo;
                 ra.rr_hi = route_resident_cfg().hi;
                 ra.rr_res2 = res2_ != nullptr ? res2_ + (size_t) l * NE : nullptr;
-                ra.rr_stats = route_resident_stats();
+                ra.rr_stats = route_resident_cfg().d_stats;   // allocated by init, never during a capture
             }
             try {
                 verify_router(ra, cs);

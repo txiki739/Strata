@@ -273,6 +273,10 @@ if(STRATA_ENABLE_CUDA)
   target_include_directories(dequant_s2_parity PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
   target_link_libraries(dequant_s2_parity PRIVATE strata_kernels CUDA::cudart)
   add_test(NAME dequant_s2_parity COMMAND dequant_s2_parity --selftest)
+  # the coalesced Q8_0 dequant against the per-block kernel: the same bytes in BF16, FP16 and FP32
+  add_executable(dequant_q8_0_identity src/kernels/dequant_q8_0_identity.cu)
+  target_link_libraries(dequant_q8_0_identity PRIVATE strata_kernels CUDA::cudart)
+  add_test(NAME dequant_q8_0_identity COMMAND dequant_q8_0_identity)
 
   add_executable(s2_gemv_parity src/kernels/s2_gemv_parity.cpp)
   target_include_directories(s2_gemv_parity PRIVATE ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES})
