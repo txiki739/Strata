@@ -281,8 +281,12 @@ bool AdaptiveTier::adapt(std::vector<float>& usage, std::string& err, bool decay
         const int32_t* lo = lower_ != nullptr ? lower_->res_->data() + l * n_expert_ : nullptr;
         for (int32_t e = 0; e < (int32_t) n_expert_; ++e) {
             const float ue = lo != nullptr && lo[e] >= 0 ? 0.5f * u[e] : u[e];
-            if (r[e] < 0) { if (ue >= 2.0f && !bl[e] && (up == nullptr || !up[e])) cand.emplace_back(ue, e); }
-            else vict.emplace_back(up != nullptr && up[e] ? -1.0f : u[e], e);   // the upper tier's copy goes first
+            if (r[e] < 0) {
+                if (ue >= 2.0f && !bl[e] && (up == nullptr || !up[e]) && src_->in_ram(l, e))
+                    cand.emplace_back(ue, e);
+            } else if (r[e] >= frozen_) {
+                vict.emplace_back(up != nullptr && up[e] ? -1.0f : u[e], e);   // the upper tier's copy goes first
+            }
         }
         if (cand.empty()) continue;
         std::sort(cand.begin(), cand.end(), [](auto& a, auto& b) { return a.first > b.first; });

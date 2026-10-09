@@ -41,6 +41,9 @@ public:
                 if (f[i] >= lo && f[i] < hi) { f[i] = f.back(); f.pop_back(); } else ++i;
     }
     int64_t free_slots() const;
+    /// The slots [0, n) hold experts that live only in VRAM (--vram-pin-gib): never evicted.  And an expert the RAM
+    /// does not hold is never a candidate (its copy would have no source; it lives in another GPU's frozen slots).
+    void set_frozen(int64_t n) { frozen_ = n; }
     /// A tier in front of this one: the experts it holds or is loading are not candidates here, and this tier's
     /// copies of them are evicted first.
     void set_upper(const AdaptiveTier* upper) { upper_ = upper; }
@@ -95,6 +98,7 @@ private:
     const AdaptiveTier* upper_ = nullptr;
     const AdaptiveTier* lower_ = nullptr;
     bool wait_ = false;
+    int64_t frozen_ = 0;
     std::vector<uint8_t> blocked_;                        // per (layer, expert): not a candidate, rebuilt each call
     std::vector<uint8_t> upper_has_;                      // per (layer, expert), rebuilt each call
     std::vector<std::vector<int32_t>> free_;              // per layer

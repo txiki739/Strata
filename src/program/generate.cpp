@@ -74,6 +74,7 @@
 #include <string>
 #include <set>
 #include <vector>
+#include <array>
 
 namespace {
 
@@ -242,6 +243,12 @@ struct Options {
     int second_gpu_reserve_mib = 2048;
     double second_gpu_min_mb = 4.0;   ///< a layer's misses from which it takes its share (smaller: the CPU is quicker)
     double second_gpu_prefetch_mb = 12.0;   ///< per layer, the likeliest experts no GPU holds copied to it ahead (0 = off)
+    /// The profile's hottest experts, up to this many GiB, live only in the main GPU's VRAM (its lowest slots, never
+    /// evicted, lent to the prompt path or given to the K/V) and the RAM arena leaves them out; `second_gpu_pin_gib`
+    /// the next ones in the second GPU's.  A model whose experts outgrow the RAM then fits (a 119.5 GiB Q8_0 on a
+    /// 125.7 GiB machine).
+    double vram_pin_gib = 0.0;
+    double second_gpu_pin_gib = 0.0;
     /// Keep GPU 1 resident and executing, but do not adapt its residency while the main tier adapts.
     /// The default remains coupled dual-tier adaptation.
     bool no_second_gpu_adapt = false;
@@ -380,6 +387,10 @@ void usage() {
                  "  --second-gpu-prefetch-mb M  per layer, copy its likeliest experts that no GPU holds (the next\n"
                  "                       layer's router on this layer's input), up to M MiB, to it while the RAM is idle\n"
                  "                       (default 12: ~0.28 ms at its ~48 GB/s; 0 = off)\n"
+                 "  --vram-pin-gib G     the profile's hottest experts, up to G GiB, live only in the main GPU's\n"
+                 "                       VRAM: its lowest slots keep them for good and the RAM arena leaves them out\n"
+                 "                       (experts that outgrow the RAM then fit; native packs read from the GGUF)\n"
+                 "  --second-gpu-pin-gib G  the next ones, up to G GiB, only in the second GPU's VRAM\n"
                  "  --kv-grow            with --serve: the K/V takes VRAM only for the cells the requests\n"
                  "                       reach and the expert cache holds the rest, giving slots up as a conversation\n"
                  "                       grows and taking them back after (STRATA_KV_GROW=1/0 too; after Niko1221/Strata\n"
@@ -707,6 +718,7 @@ struct SlotLoan {
     int device = 0;             // the cache's GPU; `main_device` is current again after `give_back`
     int main_device = 0;
     int32_t first = -1;         // the first lent slot, -1 when the cache cannot spare the bytes
+    int64_t keep = 0;           // the slots [0, keep) are never lent (experts only in VRAM, --vram-pin-gib)
     std::vector<std::pair<int32_t, int32_t>> lent;   // (residency index, slot) while lent
 
     uint64_t offset(int64_t slot) const {
@@ -717,7 +729,7 @@ struct SlotLoan {
     bool plan(uint64_t need) {
         int64_t k = 0;
         while (k < cache->slots() && (uint64_t) cache->bytes() - offset(cache->slots() - k) < need) ++k;
-        first = k + 128 <= cache->slots() ? (int32_t) (cache->slots() - k) : -1;
+        first = k + 128 <= cache->slots() && cache->slots() - k >= keep ? (int32_t) (cache->slots() - k) : -1;
         return first >= 0;
     }
     void* base() const { return first >= 0 ? (void*) cache->device_slot(first) : nullptr; }
@@ -926,6 +938,8 @@ int main(int argc, char** argv) {
         else if (a == "--second-gpu-reserve-mib") o.second_gpu_reserve_mib = std::atoi(next("--second-gpu-reserve-mib"));
         else if (a == "--second-gpu-min-mb") o.second_gpu_min_mb = std::atof(next("--second-gpu-min-mb"));
         else if (a == "--second-gpu-prefetch-mb") o.second_gpu_prefetch_mb = std::atof(next("--second-gpu-prefetch-mb"));
+        else if (a == "--vram-pin-gib") o.vram_pin_gib = std::atof(next("--vram-pin-gib"));
+        else if (a == "--second-gpu-pin-gib") o.second_gpu_pin_gib = std::atof(next("--second-gpu-pin-gib"));
         else if (a == "--no-second-gpu-adapt") o.no_second_gpu_adapt = true;
         else if (a == "--kv-grow") o.kv_grow = true;
         else if (a == "--no-kv-grow") o.kv_grow = false;
@@ -1446,28 +1460,100 @@ int main(int argc, char** argv) {
     // The earlier "the arena does not fit" conclusion was WRONG and is worth recording: the failure was a stale
     // CUDA error left set by the failed `cudaHostRegister` and read later by `gr_read`'s launch check.  See the
     // note in `pinned.cu`.
+    // ---- --vram-pin-gib / --second-gpu-pin-gib: the profile's hottest experts live only in VRAM.  The main GPU's
+    // go into its lowest slots, the second's into the second GPU's lowest, where nothing evicts them, lends them to
+    // the prompt path or gives them to the K/V; a GPU computes them whenever they are routed, and the arena leaves
+    // them out (each GiB pinned is a GiB of RAM).  The main GPU's are the profile's first, the second GPU's the ones
+    // right after the main GPU's cache: each card holds the experts it holds without pins (the main one, the faster,
+    // the hottest).  So with pins the arena loads once the main GPU's cache is sized, just before its fill.
+    std::vector<std::pair<int32_t, int32_t>> pin1, pin2;
+    std::vector<uint8_t> vram_only;   // per (layer, expert): 1 only in the main GPU's VRAM, 2 only in the second's
+    const bool pinning = o.vram_pin_gib > 0 || o.second_gpu_pin_gib > 0;
+    if (pinning) {
+        const char* why = o.mmap_experts ? "--mmap-experts reads every expert from the file"
+                        : o.expert_profile.empty() ? "it needs --expert-profile (its first experts are the ones pinned)"
+                        : !native_pack ? "it needs a native pack"
+                        : o.expert_cache_per_layer ? "--expert-cache-per-layer places the experts by layer"
+                        : o.second_gpu_pin_gib > 0 && o.second_gpu < 0 ? "--second-gpu-pin-gib needs --second-gpu"
+                        : o.second_gpu_pin_gib > 0 && o.no_prompt_offload
+                            ? "--second-gpu-pin-gib needs the prompt path's share on the second GPU (no --no-prompt-offload)"
+                        : nullptr;
+        if (why != nullptr) {
+            std::fprintf(stderr, "strata generate: --vram-pin-gib: %s\n", why);
+            return 2;
+        }
+    }
     strata::core::FileExpertSource src;
     strata::core::ArenaExpertSource arena_src;
     strata::core::ExpertSource* srcp = nullptr;
-    if (o.mmap_experts) {
-        if (!src.open(o.pack, g.n_layers, g.n_expert, err)) {
-            std::fprintf(stderr, "strata generate: %s\n", err.c_str());
-            return 1;
+    auto load_experts = [&]() -> bool {
+        if (o.mmap_experts) {
+            if (!src.open(o.pack, g.n_layers, g.n_expert, err)) {
+                std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+                return false;
+            }
+            std::fprintf(stderr, "strata generate: experts via mmap (--mmap-experts; the A/B arm of R2.1)\n");
+            srcp = &src;
+        } else {
+            arena_src.set_gguf(native_shards);   // plan v0.3 P6: a native pack may take its experts from the GGUF
+            if (!vram_only.empty()) arena_src.set_vram_only(vram_only);
+            if (!arena_src.open(o.pack, g.n_layers, g.n_expert, /*threads=*/6, err)) {
+                std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+                return false;
+            }
+            std::fprintf(stderr, "strata generate: expert arena: %s\n", arena_src.note().c_str());
+            std::fprintf(stderr, "strata generate: loaded %.2f GiB at %.2f GiB/s\n",
+                         (double) (strata::kernels::cpu::expert_layout().total - arena_src.vram_only_bytes()) /
+                             (1024.0 * 1024 * 1024),
+                         arena_src.load_gib_per_second());
+            srcp = &arena_src;
         }
-        std::fprintf(stderr, "strata generate: experts via mmap (--mmap-experts; the A/B arm of R2.1)\n");
-        srcp = &src;
-    } else {
-        arena_src.set_gguf(native_shards);   // plan v0.3 P6: a native pack may take its experts from the GGUF
-        if (!arena_src.open(o.pack, g.n_layers, g.n_expert, /*threads=*/6, err)) {
-            std::fprintf(stderr, "strata generate: %s\n", err.c_str());
-            return 1;
-        }
-        std::fprintf(stderr, "strata generate: expert arena: %s\n", arena_src.note().c_str());
-        std::fprintf(stderr, "strata generate: loaded %.2f GiB at %.2f GiB/s\n",
-                     (double) strata::kernels::cpu::expert_layout().total / (1024.0 * 1024 * 1024),
-                     arena_src.load_gib_per_second());
-        srcp = &arena_src;
-    }
+        return true;
+    };
+    if (!pinning && !load_experts()) return 1;
+    // The experts only in VRAM go from the model's files straight into their slots: (slot, layer, expert) each,
+    // read by a few threads at once, each through a pinned block of its own.
+    auto is_vram_only = [&](int64_t layer, int64_t expert) {
+        return !vram_only.empty() && vram_only[(size_t) layer * (size_t) g.n_expert + (size_t) expert] != 0;
+    };
+    auto fill_from_model = [&](strata::core::ExpertCache& cache, int device,
+                               const std::vector<std::array<int32_t, 3>>& list, std::string& e) -> bool {
+        if (list.empty()) return true;
+        const auto& lay = strata::kernels::cpu::expert_layout();
+        std::atomic<size_t> next{0};
+        std::atomic<bool> bad{false};
+        std::mutex mu;
+        auto worker = [&]() {
+            std::string we;
+            uint8_t* buf = nullptr;
+            if (cudaSetDevice(device) != cudaSuccess || cudaHostAlloc((void**) &buf, lay.max_blob, cudaHostAllocDefault) != cudaSuccess) {
+                (void) cudaGetLastError();
+                we = "no pinned block to read the VRAM-only experts through";
+            }
+            for (size_t k; we.empty() && !bad && (k = next++) < list.size();) {
+                const auto [slot, l, ex] = list[k];
+                if (!arena_src.read_file_blob(l, ex, buf, we)) break;
+                if (cudaMemcpy(cache.device_slot(slot), buf, (size_t) lay.blob_bytes(l), cudaMemcpyHostToDevice) != cudaSuccess)
+                    we = std::string("copying a VRAM-only expert: ") + cudaGetErrorString(cudaGetLastError());
+            }
+            if (buf != nullptr) cudaFreeHost(buf);
+            if (!we.empty()) {
+                std::lock_guard<std::mutex> lk(mu);
+                if (!bad.exchange(true)) e = we;
+            }
+        };
+        std::vector<std::thread> ts;
+        for (int t = 0; t < 8; ++t) ts.emplace_back(worker);
+        for (auto& t : ts) t.join();
+        return !bad;
+    };
+    // a slot holding an expert only in VRAM read back and compared with the model's bytes
+    auto verify_from_model = [&](strata::core::ExpertCache& cache, int32_t slot, int64_t layer, int64_t expert,
+                                 std::string& e) -> bool {
+        std::vector<uint8_t> want(strata::kernels::cpu::expert_layout().max_blob);
+        const int64_t bytes = (int64_t) strata::kernels::cpu::expert_layout().blob_bytes(layer);
+        return arena_src.read_file_blob(layer, expert, want.data(), e) && cache.verify_slot(slot, want.data(), e, bytes);
+    };
     // Plan v0.3 P6: the MTP draft layer, loaded before the VRAM expert tier is sized from what is left.
     strata::core::MtpDrafter mtp;
     if (!o.mtp.empty()) {
@@ -1672,12 +1758,42 @@ int main(int argc, char** argv) {
     // ONCE: with `slots` pairs and `slots` slots the cache is full when this returns, so the decode-time
     // admission finds no room and every non-profiled expert stays a CPU miss.  That is what makes the profile
     // the policy rather than a hint.
+    if (pinning) {
+        const auto& lay = strata::kernels::cpu::expert_layout();
+        const size_t n_main = (size_t) std::min<int64_t>((int64_t) profile.size(), xcache.slots());
+        auto take = [&](size_t from, size_t to, double gib, std::vector<std::pair<int32_t, int32_t>>& out) {
+            const uint64_t budget = (uint64_t) (gib * 1073741824.0);
+            uint64_t used = 0;
+            for (size_t i = from; i < to; ++i) {
+                const uint64_t b = (lay.blob_bytes(profile[i].first) + 255) / 256 * 256;
+                if (used + b > budget) break;
+                used += b;
+                out.push_back(profile[i]);
+            }
+            return used;
+        };
+        const uint64_t b1 = take(0, n_main, o.vram_pin_gib, pin1);
+        const uint64_t b2 = take(n_main, profile.size(), o.second_gpu_pin_gib, pin2);
+        vram_only.assign((size_t) (g.n_layers * g.n_expert), 0);
+        for (const auto& pr : pin1) vram_only[(size_t) pr.first * (size_t) g.n_expert + (size_t) pr.second] = 1;
+        for (const auto& pr : pin2) vram_only[(size_t) pr.first * (size_t) g.n_expert + (size_t) pr.second] = 2;
+        std::fprintf(stderr, "strata generate: %zu experts (%.2f GiB) live only in the main GPU's VRAM (its cache's "
+                             "hottest, of %zu), %zu (%.2f GiB) only in the second GPU's; the RAM holds the others\n",
+                     pin1.size(), (double) b1 / 1073741824.0, n_main, pin2.size(), (double) b2 / 1073741824.0);
+        if (!load_experts()) return 1;
+    }
     int64_t prefilled = 0;
     if (!profile.empty() && srcp != nullptr) {
         const int64_t want = std::min<int64_t>((int64_t) profile.size(), xcache.slots());
+        std::vector<std::array<int32_t, 3>> from_model;   // (slot, layer, expert): only in VRAM, read from the model
         for (int64_t i = 0; i < want; ++i) {
             const int32_t slot = xcache.admit(profile[(size_t) i].first, profile[(size_t) i].second);
             if (slot == strata::core::kNotResident) break;
+            if (is_vram_only(profile[(size_t) i].first, profile[(size_t) i].second)) {
+                from_model.push_back({slot, profile[(size_t) i].first, profile[(size_t) i].second});
+                ++prefilled;
+                continue;
+            }
             const uint8_t* b = srcp->blob(profile[(size_t) i].first, profile[(size_t) i].second);
             if (b == nullptr || !xcache.fill_slot_blocking(slot, b, err,
                     (int64_t) strata::kernels::cpu::expert_layout().blob_bytes(profile[(size_t) i].first))) {
@@ -1687,12 +1803,33 @@ int main(int argc, char** argv) {
             }
             ++prefilled;
         }
+        if (!fill_from_model(xcache, o.main_gpu, from_model, err)) {
+            std::fprintf(stderr, "strata generate: the VRAM-only experts: %s\n", err.c_str());
+            return 1;
+        }
+        cudaSetDevice(o.main_gpu);
+        // the pinned experts are the cache's lowest slots, in order (the rest of the engine keeps away from them)
+        for (size_t k = 0; k < pin1.size(); ++k)
+            if (xcache.slot_of(pin1[k].first, pin1[k].second) != (int32_t) k) {
+                std::fprintf(stderr, "strata generate: the main GPU's cache holds %lld slots, fewer than the %zu experts "
+                                     "--vram-pin-gib pins there: lower it\n", (long long) xcache.slots(), pin1.size());
+                return 1;
+            }
         // **AND ONE SLOT IS READ BACK AND COMPARED.**  A residency table that is right about indices and wrong
         // about bytes produces a plausible token, which is this project's most expensive failure mode; the
         // cache's own `verify_slot` is the check and it costs one 1.38 MB D2H at startup.
-        if (prefilled > 0 && !xcache.verify_slot(xcache.slot_of(profile[0].first, profile[0].second),
-                                srcp->blob(profile[0].first, profile[0].second), err,
-                                (int64_t) strata::kernels::cpu::expert_layout().blob_bytes(profile[0].first))) {
+        const int32_t slot0 = xcache.slot_of(profile[0].first, profile[0].second);
+        if (prefilled > 0 &&
+            !(is_vram_only(profile[0].first, profile[0].second)
+                  ? verify_from_model(xcache, slot0, profile[0].first, profile[0].second, err)
+                  : xcache.verify_slot(slot0, srcp->blob(profile[0].first, profile[0].second), err,
+                                       (int64_t) strata::kernels::cpu::expert_layout().blob_bytes(profile[0].first)))) {
+            std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+            return 1;
+        }
+        // and the last pinned one, the far end of the parallel reads
+        if (pin1.size() > 1 && !verify_from_model(xcache, (int32_t) pin1.size() - 1, pin1.back().first,
+                                                  pin1.back().second, err)) {
             std::fprintf(stderr, "strata generate: %s\n", err.c_str());
             return 1;
         }
@@ -2308,6 +2445,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "strata generate: %s\n", err.c_str());
         return 1;
     }
+    tier.set_frozen((int64_t) pin1.size());
     // ---- a second GPU as another expert tier: the profile's pairs the first GPU's cache does not hold, then empty
     // slots for every layer, which its own adaptive tier fills with the conversation's experts the first tier has not.
     // Without free VRAM there (another process holds it) the engine runs on the main GPU alone.
@@ -2385,12 +2523,28 @@ int main(int argc, char** argv) {
                 if (sizes.empty()) err = "no VRAM for experts once the slots are written";
                 ok = !sizes.empty() && gpu2.cache().open_sized(sizes, g.n_layers, g.n_expert, err);
             }
+            std::vector<std::array<int32_t, 3>> from_model;   // (slot, layer, expert): only in this GPU's VRAM
             for (size_t i = 0; ok && i < pre.size(); ++i) {
                 const int32_t slot = gpu2.cache().admit(pre[i].first, pre[i].second);
+                if (slot != strata::core::kNotResident && is_vram_only(pre[i].first, pre[i].second)) {
+                    from_model.push_back({slot, pre[i].first, pre[i].second});
+                    continue;
+                }
                 const uint8_t* b = srcp->blob(pre[i].first, pre[i].second);
                 ok = slot != strata::core::kNotResident && b != nullptr &&
                      gpu2.cache().fill_slot_blocking(slot, b, err, (int64_t) lay.blob_bytes(pre[i].first));
             }
+            ok = ok && fill_from_model(gpu2.cache(), o.second_gpu, from_model, err);
+            cudaSetDevice(o.second_gpu);
+            for (size_t k = 0; ok && k < pin2.size(); ++k)
+                if (gpu2.cache().slot_of(pin2[k].first, pin2[k].second) != (int32_t) k) {
+                    ok = false;
+                    err = "its cache holds " + std::to_string(gpu2.cache().slots()) + " slots, fewer than the " +
+                          std::to_string(pin2.size()) + " experts --second-gpu-pin-gib pins there: lower it";
+                }
+            if (ok && !pin2.empty())
+                ok = verify_from_model(gpu2.cache(), 0, pin2[0].first, pin2[0].second, err) &&
+                     verify_from_model(gpu2.cache(), (int32_t) pin2.size() - 1, pin2.back().first, pin2.back().second, err);
             cudaSetDevice(main_dev);
         }
         if (ok) {
@@ -2402,6 +2556,7 @@ int main(int argc, char** argv) {
             ok = tier2.init(gpu2.cache(), *srcp, host_res2, g.n_layers, g.n_expert, o.adapt_swaps, err,
                             o.second_gpu, main_dev);
             if (ok) {
+                tier2.set_frozen((int64_t) pin2.size());
                 // lowest slots first: the last ones, which the prompt path borrows, stay empty longest
                 for (size_t i = empty2.size(); i-- > 0;) tier2.add_free(empty2[i], (int32_t) (pre.size() + i));
                 tier2.set_upper(&tier);
@@ -2419,6 +2574,10 @@ int main(int argc, char** argv) {
         } else {
             // another process may hold its VRAM (a model, a desktop app): the engine runs on the main GPU alone
             std::fprintf(stderr, "strata generate: second GPU %d unused: %s\n", o.second_gpu, err.c_str());
+            if (!pin2.empty()) {   // its pinned experts are in no RAM: nothing else can compute them
+                std::fprintf(stderr, "strata generate: the experts --second-gpu-pin-gib pins have no other home\n");
+                return 1;
+            }
             o.second_gpu = -1;
             host_res2.clear();
         }
@@ -2480,14 +2639,66 @@ int main(int argc, char** argv) {
             pbuf.loan.res = &host_res;
             pbuf.loan.d_res = d_res;
             pbuf.loan.device = pbuf.loan.main_device = o.main_gpu;
+            pbuf.loan.keep = (int64_t) pin1.size();
         }
         if (off) {
             pbuf.loan2.cache = &gpu2.cache();
             pbuf.loan2.res = &host_res2;
             pbuf.loan2.device = o.second_gpu;
             pbuf.loan2.main_device = o.main_gpu;
+            pbuf.loan2.keep = (int64_t) pin2.size();
         }
-        return pbuf.init(o.prefill_chunk, !o.no_prefill_borrow, e);
+        if (!pbuf.init(o.prefill_chunk, !o.no_prefill_borrow, e)) return false;
+        if (pin1.empty() && pin2.empty()) return true;
+        if (!pin2.empty() && !off) {   // the main GPU's share would stream them from RAM
+            e = "--second-gpu-pin-gib needs the prompt path's share on the second GPU";
+            return false;
+        }
+        // With experts pinned in the lowest slots, the largest loan each GPU's prompt path can take must fit above
+        // them (one that did not would allocate its buffers on a card the cache fills).  Its prefetch area holds a
+        // layer's experts that neither GPU holds: at most those the pins leave.
+        const auto& lay = strata::kernels::cpu::expert_layout();
+        uint64_t stride = 0;
+        for (int64_t l = 0; l < g.n_layers; ++l)
+            stride = std::max<uint64_t>(stride, ((uint64_t) lay.blob_bytes(l) + 255) & ~(uint64_t) 255);
+        std::vector<int64_t> held1((size_t) g.n_layers, 0), held12((size_t) g.n_layers, 0);
+        for (const auto& pr : pin1) { ++held1[(size_t) pr.first]; ++held12[(size_t) pr.first]; }
+        for (const auto& pr : pin2) ++held12[(size_t) pr.first];
+        int64_t miss1 = 0, miss12 = 0;
+        for (int64_t l = 0; l < g.n_layers; ++l) {
+            miss1 = std::max<int64_t>(miss1, g.n_expert - held1[(size_t) l]);
+            miss12 = std::max<int64_t>(miss12, g.n_expert - held12[(size_t) l]);
+        }
+        auto pre_area = [&](int64_t miss) {
+            if (o.prefill_chunk < strata::prefill::ExpertRunner::kPrefetchMin) return (uint64_t) 0;
+            const uint64_t b = (uint64_t) miss * stride;
+            return b + b / 10;
+        };
+        auto check = [&](bool lent, strata::core::ExpertCache& cache, int64_t keep, uint64_t worst, const char* gpu,
+                         const char* flag) {
+            SlotLoan probe;
+            probe.cache = &cache;
+            probe.keep = keep;
+            if (lent && probe.plan(worst)) return true;
+            const double left = (double) (cache.bytes() - (int64_t) probe.offset(keep)) / 1073741824.0;
+            char buf[400];
+            std::snprintf(buf, sizeof buf, "the prompt path needs %.2f GiB of the %s cache above its pinned experts, "
+                          "which leave %.2f GiB: lower %s by %.2f", (double) worst / 1073741824.0, gpu, left, flag,
+                          (double) worst / 1073741824.0 - left + 0.05);
+            e = buf;
+            return false;
+        };
+        if (!o.no_prefill_borrow && !pin1.empty() &&
+            !check(pbuf.lend, xcache, (int64_t) pin1.size(),
+                   strata::prefill::Prefill::bytes_needed(g, ss, o.prefill_chunk, off) + (off ? 0 : pre_area(miss1)),
+                   "main GPU's", "--vram-pin-gib"))
+            return false;
+        if (!o.no_prefill_borrow && !pin2.empty() &&
+            !check(pbuf.lend2, gpu2.cache(), (int64_t) pin2.size(),
+                   strata::prefill::ExpertRunner::bytes_needed(o.prefill_chunk, g.n_expert, true, true) +
+                       pre_area(miss12), "second GPU's", "--second-gpu-pin-gib"))
+            return false;
+        return true;
     };
 
     // ================================ WHERE THE HOST TERM GOES, PER TOKEN ================================
@@ -2567,7 +2778,9 @@ int main(int argc, char** argv) {
                 uint64_t stride = 0;
                 for (int64_t l = 0; l < lay.n_layers; ++l)
                     stride = std::max<uint64_t>(stride, ((uint64_t) lay.blob_bytes(l) + 255) & ~(uint64_t) 255);
-                const uint64_t worst_pre = stride * (uint64_t) g.n_expert;
+                // (with pinned experts and the second GPU's share of the prompt path, no layer streams here: the
+                // loan is its buffers alone, Prefill::bytes_for)
+                const uint64_t worst_pre = !pin1.empty() && pbuf.offload != nullptr ? 0 : stride * (uint64_t) g.n_expert;
                 const uint64_t worst = strata::prefill::Prefill::bytes_needed(g, ss, o.prefill_chunk,
                                                                               pbuf.offload != nullptr) +
                                        worst_pre + worst_pre / 10;
@@ -2580,8 +2793,24 @@ int main(int argc, char** argv) {
             // tests: the cache keeps this many slots (at or above the bound: the K/V grows into new VRAM only)
             if (const char* v = std::getenv("STRATA_KV_GROW_FLOOR"); v != nullptr && std::atoll(v) > 0)
                 kvg.floor = std::min<int64_t>(std::atoll(v), top);
+            kvg.floor = std::max<int64_t>(kvg.floor, (int64_t) pin1.size());   // the pinned slots stay with their experts
             kvg.on = strata::core::qsa_kv_elastic() && xcache.vmm_range() != nullptr && d_res != nullptr &&
                      !host_res.empty() && srcp != nullptr && top >= kvg.floor;
+            if (!pin1.empty() && strata::core::qsa_kv_elastic()) {
+                // the whole context's K/V must fit between the pinned slots and the loan's
+                const uint64_t G = strata::core::vmm_granularity();
+                const int64_t c0 = kvg.on ? (int64_t) ((xcache.slot_offset(kvg.floor) + G - 1) / G) : 0;
+                const int64_t c1 = kvg.on ? (int64_t) (xcache.slot_offset(top) / G) : 0;
+                const int64_t need = strata::core::qsa_kv_elastic_need(o.max_context + 64);
+                if (!kvg.on || c1 - c0 < need) {
+                    std::fprintf(stderr, "strata serve: the elastic K/V needs %.2f GiB of the main GPU's cache for the "
+                                         "whole context and --vram-pin-gib leaves it %.2f: lower it by %.2f (or "
+                                         "--max-context)\n", (double) need * (double) G / 1073741824.0,
+                                 (double) std::max<int64_t>(c1 - c0, 0) * (double) G / 1073741824.0,
+                                 (double) (need - std::max<int64_t>(c1 - c0, 0)) * (double) G / 1073741824.0 + 0.05);
+                    return 1;
+                }
+            }
             if (kvg.on) {
                 kvg.top = kvg.lo = top;
                 kvg.cells = strata::core::qsa_kv_elastic_cells();

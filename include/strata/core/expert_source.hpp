@@ -61,6 +61,10 @@ public:
     virtual void begin_layer(int64_t layer, const int32_t* ids, int64_t k) { (void) layer; (void) ids; (void) k; }
     /// Plan v0.3 P6: the DEVICE address of a pinned, mapped blob (the GPU can read it over PCIe), or null.
     virtual const uint8_t* device_alias(int64_t layer, int64_t expert) const { (void) layer; (void) expert; return nullptr; }
+
+    /// Whether `blob(layer, expert)` exists.  False for an expert that lives only in VRAM (--vram-pin-gib): a GPU
+    /// holds it for good and computes it, so no path may ask the RAM for it.
+    virtual bool in_ram(int64_t layer, int64_t expert) const { (void) layer; (void) expert; return true; }
 };
 
 /// Plan v0.3 P6: the PCIe share of a verify window's layer - missed experts the main GPU reads over PCIe - written by
@@ -370,6 +374,10 @@ public:
     /// Plan v0.3 P6: a native pack without experts.bin takes its experts from the model's GGUF shards
     /// (strata::gguf_split_paths), found by tensor name.
     void set_gguf(const std::vector<std::string>& shards) { gguf_ = shards; }
+    /// Before open(): the experts (n_layers x n_expert, non-zero) that live only in VRAM.  The arena leaves them
+    /// out (a 119.5 GiB Q8_0 then fits a 125.7 GiB machine), blob() has none for them, and `read_file_blob` reads
+    /// one from the model for the GPU that keeps it.  A native pack read from its GGUF only.
+    void set_vram_only(std::vector<uint8_t> mask) { vram_only_ = std::move(mask); }
     void close();
 
     bool mapped() const { return !layer_base_.empty(); }
@@ -378,6 +386,13 @@ public:
     int64_t reads() const { return reads_; }
     bool pinned(int64_t layer, int64_t expert) const override;
     const uint8_t* device_alias(int64_t layer, int64_t expert) const override;
+    bool in_ram(int64_t layer, int64_t expert) const override {
+        return idx_.empty() || idx_[(size_t) (layer * n_expert_ + expert)] >= 0;
+    }
+    /// One expert's blob read from the model into `dst` (blob_bytes(layer) bytes; any expert, thread-safe).
+    bool read_file_blob(int64_t layer, int64_t expert, uint8_t* dst, std::string& err) const;
+    /// The bytes the arena left out (set_vram_only).
+    uint64_t vram_only_bytes() const { return vram_only_bytes_; }
 
     /// What backing was obtained and why, for the startup print.  "The engine adapts to the machine it is on" is
     /// only true if the engine says what it got.
@@ -405,6 +420,13 @@ private:
     std::string note_;
     double gib_per_s_ = 0.0;
     std::vector<std::string> gguf_;
+    std::vector<uint8_t> vram_only_;
+    /// per (layer, expert): its place among its layer's blobs in the arena, -1 for one only in VRAM (empty: all
+    /// in the arena, at their expert index)
+    std::vector<int32_t> idx_;
+    uint64_t vram_only_bytes_ = 0;
+    std::vector<std::pair<size_t, uint64_t>> spans_;   ///< per (layer, role): its shard and the tensor's offset
+    std::vector<int> fds_;                              ///< the shards, open for read_file_blob
 };
 
 }  // namespace strata::core
