@@ -3016,6 +3016,10 @@ int main(int argc, char** argv) {
         if (drive.d.gpu2 != nullptr) {
             ver.set_gpu2(true);
             ver.set_watch(&drive_watch, &drive);
+            if (!ver.set_route_res2(host_res2.data(), err)) {
+                std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+                return 1;
+            }
         }
         if (drive.tier1 != nullptr || drive.tier2 != nullptr) {   // the tiers' updates start at the tail
             ver.set_tail(&drive_tail, &drive);
@@ -3910,6 +3914,10 @@ int main(int argc, char** argv) {
         if (drive.d.gpu2 != nullptr) {
             ver.set_gpu2(true);
             ver.set_watch(&drive_watch, &drive);
+            if (!ver.set_route_res2(host_res2.data(), err)) {
+                std::fprintf(stderr, "strata generate: %s\n", err.c_str());
+                return 1;
+            }
         }
         if (drive.tier1 != nullptr || drive.tier2 != nullptr) {   // the tiers' updates start at the tail
             ver.set_tail(&drive_tail, &drive);

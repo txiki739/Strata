@@ -48,6 +48,52 @@ double ms_since(Clock::time_point t) { return std::chrono::duration<double, std:
 const bool g_dbg = std::getenv("STRATA_VERIFY_DEBUG") != nullptr;
 #define VDBG(...) do { if (g_dbg) { std::fprintf(stderr, "verify dbg: " __VA_ARGS__); std::fflush(stderr); } } while (0)
 
+// STRATA_ROUTE_RESIDENT=<margin logits> (+ STRATA_ROUTE_RESIDENT_RANKS=lo-hi, default 6-9; STRATA_ROUTE_RESIDENT_GPU2=0
+// counts the main GPU's experts alone): residency-biased routing in the decode windows (opt-in, CHANGES THE OUTPUT;
+// upstream 5df35dcb and #1737, here in the fused router).  The counters print at exit.
+struct RouteResidentCfg {
+    float margin = 0.0f;
+    int lo = 6, hi = 9;
+    bool gpu2 = true;
+    unsigned long long* d_stats = nullptr;
+};
+RouteResidentCfg& route_resident_cfg() {
+    static RouteResidentCfg c = [] {
+        RouteResidentCfg r;
+        if (const char* v = std::getenv("STRATA_ROUTE_RESIDENT")) r.margin = (float) std::atof(v);
+        if (const char* v = std::getenv("STRATA_ROUTE_RESIDENT_RANKS")) std::sscanf(v, "%d-%d", &r.lo, &r.hi);
+        if (const char* v = std::getenv("STRATA_ROUTE_RESIDENT_GPU2")) r.gpu2 = std::atoi(v) != 0;
+        r.lo = std::max(0, r.lo);
+        r.hi = std::min(9, r.hi);
+        return r;
+    }();
+    return c;
+}
+// the counters, allocated outside graph capture (Verifier::init) and printed at exit
+unsigned long long* route_resident_stats() {
+    RouteResidentCfg& c = route_resident_cfg();
+    if (c.d_stats == nullptr && c.margin > 0.0f) {
+        if (cudaMalloc((void**) &c.d_stats, 4 * sizeof(unsigned long long)) != cudaSuccess) {
+            (void) cudaGetLastError();
+            c.d_stats = nullptr;
+            return nullptr;
+        }
+        cudaMemset(c.d_stats, 0, 4 * sizeof(unsigned long long));
+        std::fprintf(stderr, "strata verify: STRATA_ROUTE_RESIDENT=%g, ranks %d-%d, %s: the routing changes (opt-in)\n",
+                     c.margin, c.lo, c.hi, c.gpu2 ? "either GPU's experts count as held" : "the main GPU's experts alone");
+        std::atexit([] {
+            unsigned long long h[4] = {};
+            RouteResidentCfg& k = route_resident_cfg();
+            if (cudaMemcpy(h, k.d_stats, sizeof(h), cudaMemcpyDeviceToHost) != cudaSuccess) return;
+            std::fprintf(stderr, "route-resident: margin %g ranks %d-%d: tail entries no GPU held %llu, swapped %llu "
+                                 "(%.1f%%); entries no GPU held %llu -> %llu (%.1f%% fewer)\n",
+                         k.margin, k.lo, k.hi, h[0], h[1], h[0] ? 100.0 * (double) h[1] / (double) h[0] : 0.0, h[2], h[3],
+                         h[2] ? 100.0 * (1.0 - (double) h[3] / (double) h[2]) : 0.0);
+        });
+    }
+    return c.d_stats;
+}
+
 struct Bump {
     uint8_t* base = nullptr;
     uint64_t used = 0;
@@ -91,7 +137,23 @@ bool native_of(const WeightRef* w, const std::string& name, std::string& err) {
 
 }  // namespace
 
+bool Verifier::set_route_res2(const int32_t* host_res2, std::string& err) {
+    if (route_resident_cfg().margin <= 0.0f || !route_resident_cfg().gpu2 || host_res2 == nullptr || res2_ != nullptr)
+        return true;
+    if (!mapped((size_t) res_words_ * 4, (void**) &h_res2_, (void**) &m_res2_) ||
+        cudaMalloc((void**) &res2_, (size_t) res_words_ * 4) != cudaSuccess) {
+        (void) cudaGetLastError();
+        err = "verify: no room for the second GPU's residency (STRATA_ROUTE_RESIDENT)";
+        return false;
+    }
+    rr_src2_ = host_res2;
+    std::memcpy(h_res2_, host_res2, (size_t) (g_->n_layers * g_->n_expert) * sizeof(int32_t));
+    return true;
+}
+
 Verifier::~Verifier() {
+    if (res2_ != nullptr) cudaFree(res2_);
+    if (h_res2_ != nullptr) cudaFreeHost(h_res2_);
     if (cs_) cudaStreamSynchronize(cs_);
     for (auto& e : exec_)
         if (e) cudaGraphExecDestroy(e);
@@ -120,6 +182,7 @@ Verifier::~Verifier() {
 
 bool Verifier::init(const WeightTable& wt, const ModelGeometry& g, SessionState& ss, const VerifyHits& hits,
                     const NativeHead* head, int max_t, std::string& err) {
+    (void) route_resident_stats();   // STRATA_ROUTE_RESIDENT: its counters outside graph capture
     wt_ = &wt;
     g_ = &g;
     ss_ = &ss;
@@ -433,6 +496,7 @@ bool Verifier::record_window(int T, cudaStream_t cs, std::string& err) {
         return false;
     }
     copy_from_mapped((float*) res_, (const float*) m_res_, res_words_, shs_);   // int32 words, copied as they are
+    if (res2_ != nullptr) copy_from_mapped((float*) res2_, (const float*) m_res2_, res_words_, shs_);
     if (cudaEventRecord(res_ready_, shs_) != cudaSuccess) {
         err = "verify: the residency copy could not join";
         return false;
@@ -761,6 +825,13 @@ bool Verifier::record_window(int T, cudaStream_t cs, std::string& err) {
             ra.res = res_ + (size_t) l * NE; ra.slot_ptr = slot_ptr_; ra.plan = hit_plan;
             ra.cap = (int) (MT * K); ra.ptr_off = (int) plan_ptr_off_;
             ra.counter = ring_count_; ra.n_tok = n; ra.n_embd = (int) N; ra.n_expert = (int) NE;
+            if (route_resident_cfg().margin > 0.0f && K == 10 && NE == 512) {   // STRATA_ROUTE_RESIDENT
+                ra.rr_margin = route_resident_cfg().margin;
+                ra.rr_lo = route_resident_cfg().lo;
+                ra.rr_hi = route_resident_cfg().hi;
+                ra.rr_res2 = res2_ != nullptr ? res2_ + (size_t) l * NE : nullptr;
+                ra.rr_stats = route_resident_stats();
+            }
             try {
                 verify_router(ra, cs);
             } catch (const std::exception& e) {
@@ -1125,6 +1196,7 @@ bool Verifier::run(int T, const int32_t* tokens, int64_t pos0, PoolMultiFn pool,
     }
     // the residency this window decides the main GPU's hits by, and the pool reads (`residency`)
     std::memcpy(h_res_, hits_.res, (size_t) (g.n_layers * g.n_expert) * sizeof(int32_t));
+    if (rr_src2_ != nullptr) std::memcpy(h_res2_, rr_src2_, (size_t) (g.n_layers * g.n_expert) * sizeof(int32_t));
     *(volatile uint32_t*) h_seq_ = 0;
     *(volatile uint32_t*) h_flag_ = 0;
     *(volatile uint32_t*) h_flagA_ = 0;

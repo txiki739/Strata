@@ -240,6 +240,83 @@ __device__ __forceinline__ void quantize_rows(const VerifyRouterArgs& a, int b) 
         reinterpret_cast<float4*>(a.x_out + (size_t) tok * a.n_embd + (size_t) sb0 * 256)[t] =
             reinterpret_cast<const float4*>(xr)[t];
 }
+// STRATA_ROUTE_RESIDENT, one warp per token (the routing warp, after route_token): see VerifyRouterArgs::rr_margin.
+// The ranks are visited in order (a swap changes the set already picked); lane j scans experts j, j + 32, ...; a
+// strictly greater logit wins and the smallest index breaks ties.  Without a swap the router's ids and weights stand.
+__device__ void route_resident_warp(const VerifyRouterArgs& a, int tok, int lane) {
+    const float* l = a.logits + (size_t) tok * a.n_expert;
+    int32_t* id = a.ids + tok * 10;
+    float* w = a.weights + tok * 10;
+    const int32_t* r1 = a.res;
+    const int32_t* r2 = a.rr_res2;
+    auto held = [&](int e) { return r1[e] >= 0 || (r2 != nullptr && r2[e] >= 0); };
+    __syncwarp();   // route_token's lanes wrote the ids
+    int my[10];
+#pragma unroll
+    for (int r = 0; r < 10; ++r) my[r] = id[r];
+    int before = 0, tail = 0, swaps = 0;
+#pragma unroll
+    for (int r = 0; r < 10; ++r) before += held(my[r]) ? 0 : 1;
+    for (int r = a.rr_lo; r <= a.rr_hi && r < 10; ++r) {
+        const int e = my[r];
+        if (held(e)) continue;   // the same answer in every lane
+        ++tail;
+        float bv = -INFINITY;
+        int bi = -1;
+        for (int f = lane; f < 512; f += 32) {
+            if (!held(f)) continue;
+            bool used = false;
+#pragma unroll
+            for (int q = 0; q < 10; ++q) used |= my[q] == f;
+            if (used) continue;
+            const float lf = __ldcg(l + f);
+            if (lf > bv) { bv = lf; bi = f; }
+        }
+#pragma unroll
+        for (int off = 16; off > 0; off >>= 1) {
+            const float ov = __shfl_down_sync(0xffffffffu, bv, off);
+            const int oi = __shfl_down_sync(0xffffffffu, bi, off);
+            if (ov > bv || (ov == bv && oi >= 0 && (bi < 0 || oi < bi))) { bv = ov; bi = oi; }
+        }
+        bv = __shfl_sync(0xffffffffu, bv, 0);
+        bi = __shfl_sync(0xffffffffu, bi, 0);
+        if (bi >= 0 && __ldcg(l + e) - bv <= a.rr_margin) {
+            my[r] = bi;
+            ++swaps;
+        }
+    }
+    int after = before;
+    if (swaps > 0) {
+        after = 0;
+        float m = -INFINITY, ex[10], sum = 0.0f;
+#pragma unroll
+        for (int r = 0; r < 10; ++r) {
+            after += held(my[r]) ? 0 : 1;
+            m = fmaxf(m, __ldcg(l + my[r]));
+        }
+#pragma unroll
+        for (int r = 0; r < 10; ++r) {
+            ex[r] = expf(__ldcg(l + my[r]) - m);
+            sum += ex[r];
+        }
+        const float inv = 1.0f / sum;
+#pragma unroll
+        for (int r = 0; r < 10; ++r)
+            if (lane == r) {
+                id[r] = my[r];
+                w[r] = ex[r] * inv;
+                if (a.ids_out != nullptr) a.ids_out[tok * 10 + r] = my[r];
+                if (a.w_out != nullptr) a.w_out[tok * 10 + r] = ex[r] * inv;
+            }
+    }
+    if (lane == 0 && a.rr_stats != nullptr) {
+        atomicAdd(a.rr_stats + 0, (unsigned long long) tail);
+        atomicAdd(a.rr_stats + 1, (unsigned long long) swaps);
+        atomicAdd(a.rr_stats + 2, (unsigned long long) before);
+        atomicAdd(a.rr_stats + 3, (unsigned long long) after);
+    }
+    __syncwarp();
+}
 template <int TT>
 __global__ void __launch_bounds__(VR_THREADS) verify_router_kernel(VerifyRouterArgs a, int n_copy) {
     __shared__ bool s_last;
@@ -269,6 +346,7 @@ __global__ void __launch_bounds__(VR_THREADS) verify_router_kernel(VerifyRouterA
         route_token(a.logits + (size_t) warp * a.n_expert, a.ids + warp * 10, a.weights + warp * 10,
                     a.ids_out != nullptr ? a.ids_out + warp * 10 : nullptr,
                     a.w_out != nullptr ? a.w_out + warp * 10 : nullptr, lane);
+        if (a.rr_margin > 0.0f && a.res != nullptr) route_resident_warp(a, warp, lane);
         __threadfence_system();
     }
     __syncthreads();

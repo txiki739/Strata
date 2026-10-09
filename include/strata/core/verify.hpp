@@ -163,6 +163,9 @@ public:
     /// pool's rows and raises its token group's flag, and a branch of the window, forked at the ring, takes them
     /// into VRAM while the CPU works.  Set before the first `run`.
     void set_gpu2(bool on) { gpu2_ = on; }
+    /// STRATA_ROUTE_RESIDENT: the second GPU's live residency table (host, n_layers x n_expert), whose experts the
+    /// swap also counts as held (a snapshot of it goes to the device with each window's).  Before the first window.
+    bool set_route_res2(const int32_t* host_res2, std::string& err);
     /// `fn` is asked every ~2 ms while the host waits for a ring: on failure the window's waits are released and `run`
     /// returns the reason.  Set before the first `run`.
     void set_watch(WatchFn fn, void* user) { watch_ = fn; watch_user_ = user; }
@@ -236,6 +239,9 @@ private:
     int64_t plan_i32_ = 0, plan_ptr_off_ = 0, plan_stride_ = 0;   // a plan block's int32 words, its ptr field, the
                                                                   // device blocks' stride (see `init`)
     int32_t* h_res_ = nullptr;   int32_t* m_res_ = nullptr;      // the residency snapshot (`residency`)
+    // STRATA_ROUTE_RESIDENT with a second GPU: its residency's snapshot (mapped) and device copy, and the live table
+    const int32_t* rr_src2_ = nullptr;
+    int32_t* h_res2_ = nullptr;  int32_t* m_res2_ = nullptr;  int32_t* res2_ = nullptr;
     int64_t res_words_ = 0;
     GpuPlanSink sink_;
     uint32_t cur_layer_ = 0;

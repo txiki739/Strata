@@ -44,6 +44,15 @@ struct VerifyRouterArgs {
     unsigned* counter = nullptr;                       // device, zero before the first launch (each launch leaves it so)
     int n_tok = 0, n_embd = 0, n_expert = 0;           // 1..8 tokens, 512 experts, n_embd a multiple of 512
     const float* bias = nullptr;                       // (n_expert) added to the logits, or null
+    // STRATA_ROUTE_RESIDENT (opt-in, CHANGES THE OUTPUT; upstream 5df35dcb and #1737): the ranks rr_lo..rr_hi of the
+    // top 10 that no GPU holds (`res`, and `rr_res2` for the second GPU when given) take the best expert one of them
+    // holds and the ten do not, when its logit is within `rr_margin` of theirs; the weights are then the softmax of
+    // the ten logits.  0: off.  `rr_stats`: null or 4 counters (tail entries no GPU held, swaps, entries no GPU held
+    // before, after).
+    float rr_margin = 0.0f;
+    int rr_lo = 6, rr_hi = 9;
+    const int32_t* rr_res2 = nullptr;
+    unsigned long long* rr_stats = nullptr;
 };
 void verify_router(const VerifyRouterArgs& a, void* stream);
 // A prediction's bias: bias[e] = fmaf(1/8 / n_tok, sum over the n_tok tokens of (logits[t][e] - predicted[t][e]),
