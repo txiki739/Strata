@@ -423,7 +423,8 @@ void usage() {
                  "                       --adapt-every 0; not --serve)\n"
                  "  --window-logits PATH per token the verify windows emit, a line with its index among the generated\n"
                  "                       tokens, the token and the 64 likeliest as id:log-probability, from the\n"
-                 "                       head's logits (comparisons with llama.cpp, bench/parity.py; not --serve)\n"
+                 "                       head's logits (comparisons with llama.cpp, bench/parity.py; not --serve),\n"
+                 "                       then @ and the emitted token's own log-probability\n"
                  "  --window-profile     with --stats: the GPU time of each stage of the verify window (timestamps\n"
                  "                       inside the graph; each costs ~2 us)\n"
                  "  --prefill-profile    the GPU time of each section of the batched prompt path (not --serve)\n"
@@ -3977,6 +3978,8 @@ int main(int argc, char** argv) {
             std::fprintf(wlog, "%lld %d", (long long) k, (int) emitted);
             for (int j = 0; j < K; ++j)
                 std::fprintf(wlog, " %d:%.6f", (int) wl_ids[(size_t) j], (double) l[wl_ids[(size_t) j]] - lse);
+            // and the emitted token's own (a --spec-follow text's token may lie outside the 64)
+            if (emitted >= 0 && emitted < n_vocab) std::fprintf(wlog, " @%.6f", (double) l[emitted] - lse);
             std::fprintf(wlog, "\n");
         };
         std::vector<int64_t> accepted_hist((size_t) W, 0);
