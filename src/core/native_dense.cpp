@@ -66,27 +66,33 @@ bool NativeDense::load(const std::vector<std::string>& shards, WeightTable& tabl
         uint64_t split_count = 0, split_tensors = 0;
         std::set<uint64_t> split_numbers;
         bool have_architecture = false;
+        std::string first_arch;
         for (const auto& path : shards) {
             strata::GgufFile gguf(path);
             const auto* count = gguf.get("split.count");
             const auto* number = gguf.get("split.no");
             const auto* tensors = gguf.get("split.tensors.count");
-            if (gguf.get("general.architecture")) {
+            const auto* architecture = gguf.get("general.architecture");
+            if (number && !split_numbers.insert(number->u).second) {
+                err = "native dense: duplicate split shard number"; return false;
+            }
+            // A re-split GGUF (Huihui's Q8_0) repeats general.architecture on every shard but keeps the
+            // architecture's numeric keys (block_count ...) on the first one only: the full guard is the first
+            // shard's (or a single file's); a later shard that names an architecture must name the same one
+            if (architecture && (!number || number->u == 0)) {
                 err = strata::check_architecture(gguf);
                 if (!err.empty()) return false;
                 have_architecture = true;
+                first_arch = architecture->s;
                 if (count && number && tensors && number->u == 0 && count->u > 1) {
                     split_count = count->u;
                     split_tensors = tensors->u;
                 }
             } else if (!have_architecture || !split_count || !count || !number || !tensors ||
                        count->u != split_count || number->u == 0 || number->u >= split_count ||
-                       tensors->u != split_tensors) {
+                       tensors->u != split_tensors || (architecture && architecture->s != first_arch)) {
                 err = "native dense: additional shard must match the architecture-validated first shard's split metadata";
                 return false;
-            }
-            if (number && !split_numbers.insert(number->u).second) {
-                err = "native dense: duplicate split shard number"; return false;
             }
             std::vector<uint64_t> offsets;
             for (const auto& tensor : gguf.tensors()) offsets.push_back(tensor.offset);
