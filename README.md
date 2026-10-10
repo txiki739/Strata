@@ -251,6 +251,45 @@ acceptance).
   one token, but no faster in the engine: eight threads are bound by the RAM; its switches stay, off), guthirry's
   `--no-second-gpu-adapt` (no change), and the 4-bit K/V caches (`k8v4`, `q4_0`: they lose some accuracy).
 
+## A model whose experts do not fit in RAM: Q8_0
+
+huihui-ai's abliterated Qwen3.8-Flash-Next in Q8_0 has 119.5 GiB of experts; with nothing loaded this machine has
+~120 GiB available. Two new options keep the profile's hottest experts **only in VRAM**:
+`--vram-pin-gib G` puts the first G GiB of them in the main GPU's lowest cache slots, `--second-gpu-pin-gib G` the
+next ones (those the second GPU would take first) in the second GPU's. Nothing evicts them, lends them to the prompt
+path or gives them to the elastic K/V; a GPU computes them whenever they are routed; the RAM arena leaves them out
+and they are read from the GGUF straight into their slots. The main GPU still holds the same experts as without pins,
+the hottest. Startup refuses budgets that would collide with the prompt path's loans or the K/V and says by how much
+to lower them. Without the options nothing changes (the same bytes, checked); with them and the caches at a fixed
+size, the replies are the same bytes as without (`--adapt-every 0`). Huihui's re-split Q8_0 GGUF also needed the
+loader to accept the architecture name on every shard.
+
+With 11 + 11 GiB pinned the engine takes ~97.5 GiB of RAM and ~19 GiB stay free, enough for a prompt cache of 32
+checkpoints and 10 GiB of parked conversations (filled for real: at least 6 GiB still free).
+
+| Huihui, RTX 3090 + RTX 5060 Ti | UD-Q4_K_XL | Q8_0 |
+|---|---:|---:|
+| Decode, six-prompt mean | ~84 tok/s | **42.8 tok/s** |
+| Agent session (18 steps) | 84.6 tok/s | 44.6 tok/s |
+| Perplexity, 2,304 tokens of held-out Spanish text (teacher-forced) | 4.515 | **4.480** |
+| 24 math/logic problems, 4 coding tasks | 24/24, 4/4 | 24/24, 4/4 |
+
+Q8_0 decode is bound by the RAM: ~1 GB of experts per token comes from the DDR4 (43 GB/s measured) once both cards
+are full, so the settings that read less from it won: `--pcie-frac 0.25` (+5%), `--spec-min-p 0.8` (drafts only
+when likely, +2.6%) and `--feed-max 128` (short prompts through the verify windows: the first token of a short
+chat in 2.0 s instead of ~2.9). Adapting less often, fewer swaps, no prompt lookup, no prefetch, more pool workers,
+a bigger PLE row cache and a smaller VRAM reserve (out of memory) were all slower or no faster.
+
+- **Route-resident routing** (upstream 5df35dcb and #1737 by aly8246, opt-in with `STRATA_ROUTE_RESIDENT=<margin>`),
+  ported into this fork's fused router, with the second GPU's experts also counting as held (which doubles the
+  misses it removes): ranks 6-9 of the top 10 that no GPU holds take the best expert one of them holds within the
+  margin. On the Q8_0 it gives +34% at margin 0.25 and +55% at 0.5, but costs as much quality as going down to
+  UD-Q4_K_XL (+0.008 nats per token, KL 0.024-0.038 against 0.006 between two plain runs; even at 0.1: +0.005,
+  KL 0.014), so it stays off.
+- **A coalesced Q8_0 dequant** for the prompt path's dense projections (upstream #1720 by eelgaev): the same bits
+  (`dequant_q8_0_identity` compares BF16, FP16 and FP32 with the old kernel), 6x faster for that kernel on the 3090.
+- `--window-logits` lines end with the emitted token's own log-probability (`@`), for the teacher-forced checks.
+
 ## CPU pool workers
 
 <picture>

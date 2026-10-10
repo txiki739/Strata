@@ -256,6 +256,49 @@ ids, la misma aceptación).
   `--no-second-gpu-adapt` de guthirry (sin cambio) y las cachés K/V de 4 bits (`k8v4`, `q4_0`: pierden algo de
   precisión).
 
+## Un modelo cuyos expertos no caben en RAM: Q8_0
+
+El Qwen3.8-Flash-Next abliterated de huihui-ai en Q8_0 tiene 119,5 GiB de expertos; sin nada cargado, este equipo
+tiene ~120 GiB disponibles. Dos opciones nuevas dejan los expertos más usados del perfil **solo en VRAM**:
+`--vram-pin-gib G` pone los primeros G GiB en las ranuras más bajas de la caché de la gráfica principal y
+`--second-gpu-pin-gib G` los siguientes (los que la segunda gráfica cogería primero) en las suyas. Nada los expulsa,
+los presta a la ruta del prompt ni los cede a la K/V elástica; una gráfica los calcula siempre que se enrutan; el
+arena de la RAM no los carga y se leen del GGUF directamente a su ranura. La gráfica principal sigue teniendo los
+mismos expertos que sin fijar, los más calientes. Al arrancar, el motor rechaza los tamaños que chocarían con los
+préstamos de la ruta del prompt o con la K/V y dice cuánto bajarlos. Sin las opciones nada cambia (los mismos bytes,
+comprobado); con ellas y las cachés a tamaño fijo, las respuestas son los mismos bytes que sin fijar
+(`--adapt-every 0`). El GGUF re-partido del Q8_0 de Huihui necesitó además que el cargador aceptase el nombre de la
+arquitectura en todos los trozos.
+
+Con 11 + 11 GiB fijos el motor ocupa ~97,5 GiB de RAM y quedan ~19 libres, suficiente para una caché de prompts de
+32 checkpoints y 10 GiB de conversaciones aparcadas (llenada de verdad: siempre quedaron al menos 6 GiB libres).
+
+| Huihui, RTX 3090 + RTX 5060 Ti | UD-Q4_K_XL | Q8_0 |
+|---|---:|---:|
+| Generación, media de seis prompts | ~84 tok/s | **42,8 tok/s** |
+| Sesión de agente (18 pasos) | 84,6 tok/s | 44,6 tok/s |
+| Perplejidad, 2.304 tokens de texto español reservado (evaluación forzada) | 4,515 | **4,480** |
+| 24 problemas de matemáticas y lógica, 4 de programación | 24/24, 4/4 | 24/24, 4/4 |
+
+La generación del Q8_0 la limita la RAM: con las dos gráficas llenas, cada token lee ~1 GB de expertos de la DDR4
+(43 GB/s medidos), así que ganaron los ajustes que leen menos de ella: `--pcie-frac 0.25` (+5 %), `--spec-min-p 0.8`
+(borradores solo cuando son probables, +2,6 %) y `--feed-max 128` (los prompts cortos por las ventanas de
+verificación: la primera palabra de un chat corto a los 2,0 s en vez de ~2,9). Adaptar menos a menudo, menos
+cambios, sin búsqueda en el prompt, sin precarga, más workers, una caché de filas PLE mayor y menos reserva de VRAM
+(sin memoria) fueron más lentos o no más rápidos.
+
+- **Enrutado hacia expertos residentes** (5df35dcb del original y #1737 de aly8246, opcional con
+  `STRATA_ROUTE_RESIDENT=<margen>`), portado al router fusionado de este fork y contando también los expertos de la
+  segunda gráfica (lo que duplica los fallos que quita): los puestos 6-9 de los 10 elegidos que ninguna gráfica tiene
+  pasan al mejor experto que sí tenga una, si está dentro del margen. En el Q8_0 da +34 % con margen 0,25 y +55 % con
+  0,5, pero cuesta tanta calidad como bajar a UD-Q4_K_XL (+0,008 nats por token, KL 0,024-0,038 frente a 0,006 entre
+  dos ejecuciones normales; incluso con 0,1: +0,005, KL 0,014), así que queda apagado.
+- **Descuantización Q8_0 coalescida** para las proyecciones densas de la ruta del prompt (#1720 de eelgaev en el
+  original): los mismos bits (`dequant_q8_0_identity` compara BF16, FP16 y FP32 con el kernel anterior), 6 veces más
+  rápida en ese kernel en la 3090.
+- Las líneas de `--window-logits` terminan con la log-probabilidad del token emitido (`@`), para las evaluaciones
+  forzadas.
+
 ## Workers de CPU
 
 <picture>
