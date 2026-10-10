@@ -45,8 +45,13 @@ int main() {
             run(kind, out);
             cudaDeviceSynchronize();
             cudaMemcpy(pass ? b.data() : a.data(), out, n * es, cudaMemcpyDeviceToHost);
+        }
+        // timed after both have run, each path warmed up first (a cold card ramps its clocks for the first ones)
+        for (int pass = 0; pass < 2; ++pass) {
+            uint8_t* out = o + (pass ? es : 0);
+            for (int it = 0; it < 200; ++it) run(kind, out);
             cudaEventRecord(e0);
-            for (int it = 0; it < 50; ++it) run(kind, out);
+            for (int it = 0; it < 200; ++it) run(kind, out);
             cudaEventRecord(e1);
             cudaEventSynchronize(e1);
             cudaEventElapsedTime(&ms[pass], e0, e1);
@@ -54,8 +59,8 @@ int main() {
         const bool same = std::memcmp(a.data(), b.data(), n * es) == 0;
         bad += same ? 0 : 1;
         std::printf("%s: %s | coalesced %.3f ms, per block %.3f ms (x%.1f)\n",
-                    kind == 0 ? "BF16" : kind == 1 ? "FP16" : "FP32", same ? "identical" : "DIFFERENT", ms[0] / 50,
-                    ms[1] / 50, ms[1] / ms[0]);
+                    kind == 0 ? "BF16" : kind == 1 ? "FP16" : "FP32", same ? "identical" : "DIFFERENT", ms[0] / 200,
+                    ms[1] / 200, ms[1] / ms[0]);
         cudaEventDestroy(e0);
         cudaEventDestroy(e1);
         cudaFree(o);
