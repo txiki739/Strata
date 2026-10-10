@@ -287,7 +287,7 @@ a bigger PLE row cache and a smaller VRAM reserve (out of memory) were all slowe
   UD-Q4_K_XL (+0.008 nats per token, KL 0.024-0.038 against 0.006 between two plain runs; even at 0.1: +0.005,
   KL 0.014), so it stays off.
 - **A coalesced Q8_0 dequant** for the prompt path's dense projections (upstream #1720 by eelgaev): the same bits
-  (`dequant_q8_0_identity` compares BF16, FP16 and FP32 with the old kernel), 6x faster for that kernel on the 3090.
+  (`dequant_q8_0_identity` compares BF16, FP16 and FP32 with the old kernel), 5-6x faster for that kernel on the 3090 (BF16, FP16 and FP32).
 - `--window-logits` lines end with the emitted token's own log-probability (`@`), for the teacher-forced checks.
 
 ## CPU pool workers

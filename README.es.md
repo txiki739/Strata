@@ -294,8 +294,8 @@ cambios, sin búsqueda en el prompt, sin precarga, más workers, una caché de f
   0,5, pero cuesta tanta calidad como bajar a UD-Q4_K_XL (+0,008 nats por token, KL 0,024-0,038 frente a 0,006 entre
   dos ejecuciones normales; incluso con 0,1: +0,005, KL 0,014), así que queda apagado.
 - **Descuantización Q8_0 coalescida** para las proyecciones densas de la ruta del prompt (#1720 de eelgaev en el
-  original): los mismos bits (`dequant_q8_0_identity` compara BF16, FP16 y FP32 con el kernel anterior), 6 veces más
-  rápida en ese kernel en la 3090.
+  original): los mismos bits (`dequant_q8_0_identity` compara BF16, FP16 y FP32 con el kernel anterior), de 5 a 6 veces
+  más rápida en ese kernel en la 3090 (BF16, FP16 y FP32).
 - Las líneas de `--window-logits` terminan con la log-probabilidad del token emitido (`@`), para las evaluaciones
   forzadas.
 
