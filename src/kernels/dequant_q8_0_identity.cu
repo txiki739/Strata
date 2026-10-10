@@ -29,6 +29,23 @@ int main() {
         if (kind == 1) strata::kernels::dequant_f16(8, db, 0, rows, cols, (uint16_t*) out, nullptr);
         if (kind == 2) strata::kernels::dequant_f32(8, db, 0, rows, cols, (float*) out, nullptr);
     };
+    {   // an idle card runs its first launches at idle clocks (~0.4 ms each here): 1.5 s of work before any timing
+        uint8_t* w = nullptr;
+        cudaMalloc(&w, n * 4);
+        cudaEvent_t a0, a1;
+        cudaEventCreate(&a0);
+        cudaEventCreate(&a1);
+        cudaEventRecord(a0);
+        for (float spent = 0.0f; spent < 1500.0f;) {
+            for (int it = 0; it < 50; ++it) run(2, w);
+            cudaEventRecord(a1);
+            cudaEventSynchronize(a1);
+            cudaEventElapsedTime(&spent, a0, a1);
+        }
+        cudaEventDestroy(a0);
+        cudaEventDestroy(a1);
+        cudaFree(w);
+    }
     int bad = 0;
     for (int kind = 0; kind < 3; ++kind) {
         const size_t es = kind == 2 ? 4 : 2;
