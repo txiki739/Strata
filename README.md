@@ -11,13 +11,13 @@ The original Strata README (what Strata is, setup, every option) is in [STRATA-R
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/summary-dark.svg">
-  <img alt="Decode speed, six-prompt mean. UD-IQ4_XS: 92.9 tok/s on the RTX 3090, 116.3 with the RTX 5060 Ti. UD-Q4_K_XL: 71.2 and 84.9." src="docs/media/readme/summary-light.svg">
+  <img alt="Decode speed, six-prompt mean. UD-IQ4_XS: 92.9 tok/s on the RTX 3090, 116.4 with the RTX 5060 Ti. UD-Q4_K_XL: 71.2 and 86.4." src="docs/media/readme/summary-light.svg">
 </picture>
 
 | Decode, tokens/s | RTX 3090 | RTX 3090 + RTX 5060 Ti | with the second GPU |
 |---|---:|---:|---:|
-| UD-IQ4_XS | **92.9** | **116.3** | +25% |
-| UD-Q4_K_XL | **71.2** | **84.9** | +19% |
+| UD-IQ4_XS | **92.9** | **116.4** | +25% |
+| UD-Q4_K_XL | **71.2** | **86.4** | +21% |
 
 ## The machine
 
@@ -53,15 +53,18 @@ lookup, and greedy verification: the speculation never changes the output.
 ## One GPU or two
 
 The RTX 5060 Ti holds ~14.5 GB more experts and computes its share of each layer while the CPU computes its own.
+The two-GPU figures were measured again on 2026-10-10 with the current engine, where both cards also take a quarter of
+the CPU's misses over PCIe (`--pcie-frac 0.25`: +1-2%); two runs each, prompt reading the median of four. The one-GPU,
+long-prompt and 64 GB figures are the 06-10 ones: without its new options the engine since gives the same output.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 89.9/116.7, reasoning 97.5/122.9, after an 18K document 79.5/101.8, code 99.1/129.4, edit 132.8/183.2, after a 5K prompt 70.0/71.4." src="docs/media/readme/decode-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 89.9/107.3, reasoning 97.5/125.3, after an 18K document 79.5/104.4, code 99.1/130.2, edit 132.8/181.2, after a 5K prompt 70.0/75.1." src="docs/media/readme/decode-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 70.2/88.8, reasoning 83.7/86.4, after an 18K document 59.3/77.9, code 74.8/89.9, edit 97.0/129.2, after a 5K prompt 51.7/53.8." src="docs/media/readme/decode-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL decode per prompt, RTX 3090 vs RTX 3090 + RTX 5060 Ti: Spanish chat 70.2/88.1, reasoning 83.7/87.2, after an 18K document 59.3/78.0, code 74.8/91.3, edit 97.0/133.0, after a 5K prompt 51.7/57.1." src="docs/media/readme/decode-q4kxl-light.svg">
 </picture>
 
 Reading the prompt (prefill) gains from the second GPU on short prompts; an 18K prompt is bound by the 3090's x8 link
@@ -69,15 +72,15 @@ either way.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS prefill, RTX 3090 vs both cards: 18,076 tokens 1,803/1,836 tok/s, 5,296 tokens 1,180/1,550, 3,340 tokens 851/1,086." src="docs/media/readme/prefill-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS prefill, RTX 3090 vs both cards: 18,076 tokens 1,803/1,851 tok/s, 5,296 tokens 1,180/1,557, 3,340 tokens 851/1,110." src="docs/media/readme/prefill-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL prefill, RTX 3090 vs both cards: 18,076 tokens 1,730/1,758 tok/s, 5,296 tokens 899/1,113, 3,340 tokens 660/794." src="docs/media/readme/prefill-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL prefill, RTX 3090 vs both cards: 18,076 tokens 1,730/1,774 tok/s, 5,296 tokens 899/1,115, 3,340 tokens 660/803." src="docs/media/readme/prefill-q4kxl-light.svg">
 </picture>
 
-UD-IQ4_XS is the faster of the two here (+30% on one GPU, +37% on two): its experts are smaller, so more of them fit
+UD-IQ4_XS is the faster of the two here (+30% on one GPU, +35% on two): its experts are smaller, so more of them fit
 in VRAM (84% / 91% cache hits against 81% / 85%), and its compute-bound CPU kernels use all seven workers.
 UD-Q4_K_XL is the larger, higher-precision quant.
 
@@ -269,10 +272,32 @@ checkpoints and 10 GiB of parked conversations (filled for real: at least 6 GiB 
 
 | Huihui, RTX 3090 + RTX 5060 Ti | UD-Q4_K_XL | Q8_0 |
 |---|---:|---:|
-| Decode, six-prompt mean | ~84 tok/s | **42.8 tok/s** |
+| Decode, six-prompt mean | 84.0 tok/s | **41.8 tok/s** |
 | Agent session (18 steps) | 84.6 tok/s | 44.6 tok/s |
+| Reading an 18K / 200K prompt | 1,782 / 2,284 tok/s | 1,330 / 2,057 tok/s |
 | Perplexity, 2,304 tokens of held-out Spanish text (teacher-forced) | 4.515 | **4.480** |
 | 24 math/logic problems, 4 coding tasks | 24/24, 4/4 | 24/24, 4/4 |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-decode-dark.svg">
+  <img alt="Huihui decode per prompt on both cards, UD-Q4_K_XL vs Q8_0: Spanish chat 76.5/39.6, reasoning 95.0/44.4, after an 18K document 77.5/43.7, code 89.8/41.5, edit 131.0/41.4, after a 5K prompt 53.7/40.8 tok/s." src="docs/media/readme/q8-decode-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-prefill-dark.svg">
+  <img alt="Huihui prompt reading on both cards, UD-Q4_K_XL vs Q8_0: 18,076 tokens 1,782/1,330 tok/s, 5,296 tokens 1,120/610, 3,340 tokens 808/426." src="docs/media/readme/q8-prefill-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-longctx-dark.svg">
+  <img alt="Huihui decode right after a long prompt on both cards, UD-Q4_K_XL vs Q8_0: 32K 76.1/40.0, 64K 92.3/46.6, 120K 74.8/33.5, 200K 71.0/40.4 tok/s." src="docs/media/readme/q8-longctx-light.svg">
+</picture>
+
+The Q8_0 decodes at half the speed of UD-Q4_K_XL whatever the prompt: unlike UD-Q4_K_XL it gains nothing from a
+draft that is accepted (the edit prompt), since every extra token brings its own experts from the RAM. Long prompts
+are read almost as fast (2,057-2,256 tok/s; a 200K prompt in 97 s against 88), because the prompt path computes
+every expert on the GPUs. Decode two runs each, the long prompts one run (128 tokens of answer, so they move more),
+prompt reading the median of four (UD-Q4_K_XL) and eight (Q8_0) runs.
 
 Q8_0 decode is bound by the RAM: ~1 GB of experts per token comes from the DDR4 (43 GB/s measured) once both cards
 are full, so the settings that read less from it won: `--pcie-frac 0.25` (+5%), `--spec-min-p 0.8` (drafts only
@@ -286,6 +311,11 @@ a bigger PLE row cache and a smaller VRAM reserve (out of memory) were all slowe
   margin. On the Q8_0 it gives +34% at margin 0.25 and +55% at 0.5, but costs as much quality as going down to
   UD-Q4_K_XL (+0.008 nats per token, KL 0.024-0.038 against 0.006 between two plain runs; even at 0.1: +0.005,
   KL 0.014), so it stays off.
+
+<picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-quality-dark.svg">
+    <img alt="KL divergence from Q8_0 times 1000, teacher-forced over 2,304 tokens of Spanish text: a second Q8_0 run 5.6, route-resident at 0.1 13.6, at 0.25 23.5, at 0.5 37.5, UD-Q4_K_XL 28.2." src="docs/media/readme/q8-quality-light.svg">
+  </picture>
 - **A coalesced Q8_0 dequant** for the prompt path's dense projections (upstream #1720 by eelgaev): the same bits
   (`dequant_q8_0_identity` compares BF16, FP16 and FP32 with the old kernel), 5-6x faster for that kernel on the 3090 (BF16, FP16 and FP32).
 - `--window-logits` lines end with the emitted token's own log-probability (`@`), for the teacher-forced checks.

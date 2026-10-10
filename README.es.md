@@ -11,13 +11,13 @@ expertos, más algunos arreglos y varios cambios recientes del motor original (e
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/summary-dark.svg">
-  <img alt="Velocidad de generación, media de seis textos. UD-IQ4_XS: 92,9 tok/s con la RTX 3090 y 116,3 con la RTX 5060 Ti. UD-Q4_K_XL: 71,2 y 84,9." src="docs/media/readme/summary-light.svg">
+  <img alt="Velocidad de generación, media de seis textos. UD-IQ4_XS: 92,9 tok/s con la RTX 3090 y 116,4 con la RTX 5060 Ti. UD-Q4_K_XL: 71,2 y 86,4." src="docs/media/readme/summary-light.svg">
 </picture>
 
 | Generación, tokens/s | RTX 3090 | RTX 3090 + RTX 5060 Ti | con la segunda gráfica |
 |---|---:|---:|---:|
-| UD-IQ4_XS | **92,9** | **116,3** | +25 % |
-| UD-Q4_K_XL | **71,2** | **84,9** | +19 % |
+| UD-IQ4_XS | **92,9** | **116,4** | +25 % |
+| UD-Q4_K_XL | **71,2** | **86,4** | +21 % |
 
 ## El equipo
 
@@ -53,15 +53,19 @@ español y búsqueda en el prompt, y verificación greedy: la especulación nunc
 ## Una gráfica o dos
 
 La RTX 5060 Ti guarda ~14,5 GB más de expertos y calcula su parte de cada capa mientras la CPU calcula la suya.
+Las cifras con dos gráficas se midieron de nuevo el 2026-10-10 con el motor actual, en el que además la tarjeta
+principal calcula por PCIe un cuarto de los fallos de la CPU (`--pcie-frac 0.25`: +1-2 %); dos rondas cada una, y la
+lectura del prompt, la mediana de cuatro. Las de una gráfica, prompts largos y 64 GB son las del 06-10: sin sus
+opciones nuevas, el motor da desde entonces la misma salida.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-iq4xs-dark.svg">
-  <img alt="UD-IQ4_XS por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 89,9/116,7, razonamiento 97,5/122,9, tras un documento de 18K 79,5/101,8, código 99,1/129,4, edición 132,8/183,2, tras un prompt de 5K 70,0/71,4." src="docs/media/readme/decode-iq4xs-light.svg">
+  <img alt="UD-IQ4_XS por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 89,9/107,3, razonamiento 97,5/125,3, tras un documento de 18K 79,5/104,4, código 99,1/130,2, edición 132,8/181,2, tras un prompt de 5K 70,0/75,1." src="docs/media/readme/decode-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/decode-q4kxl-dark.svg">
-  <img alt="UD-Q4_K_XL por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 70,2/88,8, razonamiento 83,7/86,4, tras un documento de 18K 59,3/77,9, código 74,8/89,9, edición 97,0/129,2, tras un prompt de 5K 51,7/53,8." src="docs/media/readme/decode-q4kxl-light.svg">
+  <img alt="UD-Q4_K_XL por texto, RTX 3090 frente a RTX 3090 + RTX 5060 Ti: chat en español 70,2/88,1, razonamiento 83,7/87,2, tras un documento de 18K 59,3/78,0, código 74,8/91,3, edición 97,0/133,0, tras un prompt de 5K 51,7/57,1." src="docs/media/readme/decode-q4kxl-light.svg">
 </picture>
 
 La lectura del prompt (prefill) gana con la segunda gráfica en los prompts cortos; uno de 18K lo limita el enlace x8 de
@@ -69,15 +73,15 @@ la 3090 en los dos casos.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-iq4xs-dark.svg">
-  <img alt="Prefill de UD-IQ4_XS, RTX 3090 frente a las dos: 18.076 tokens 1.803/1.836 tok/s, 5.296 tokens 1.180/1.550, 3.340 tokens 851/1.086." src="docs/media/readme/prefill-iq4xs-light.svg">
+  <img alt="Prefill de UD-IQ4_XS, RTX 3090 frente a las dos: 18.076 tokens 1.803/1.851 tok/s, 5.296 tokens 1.180/1.557, 3.340 tokens 851/1.110." src="docs/media/readme/prefill-iq4xs-light.svg">
 </picture>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/prefill-q4kxl-dark.svg">
-  <img alt="Prefill de UD-Q4_K_XL, RTX 3090 frente a las dos: 18.076 tokens 1.730/1.758 tok/s, 5.296 tokens 899/1.113, 3.340 tokens 660/794." src="docs/media/readme/prefill-q4kxl-light.svg">
+  <img alt="Prefill de UD-Q4_K_XL, RTX 3090 frente a las dos: 18.076 tokens 1.730/1.774 tok/s, 5.296 tokens 899/1.115, 3.340 tokens 660/803." src="docs/media/readme/prefill-q4kxl-light.svg">
 </picture>
 
-Aquí UD-IQ4_XS es el más rápido (+30 % con una gráfica, +37 % con dos): sus expertos ocupan menos, así que caben más
+Aquí UD-IQ4_XS es el más rápido (+30 % con una gráfica, +35 % con dos): sus expertos ocupan menos, así que caben más
 en VRAM (84 % / 91 % de aciertos frente a 81 % / 85 %), y sus kernels de CPU, limitados por cálculo, aprovechan los
 siete workers. UD-Q4_K_XL es el cuantizado más grande y de más precisión.
 
@@ -275,10 +279,32 @@ Con 11 + 11 GiB fijos el motor ocupa ~97,5 GiB de RAM y quedan ~19 libres, sufic
 
 | Huihui, RTX 3090 + RTX 5060 Ti | UD-Q4_K_XL | Q8_0 |
 |---|---:|---:|
-| Generación, media de seis prompts | ~84 tok/s | **42,8 tok/s** |
+| Generación, media de seis prompts | 84,0 tok/s | **41,8 tok/s** |
 | Sesión de agente (18 pasos) | 84,6 tok/s | 44,6 tok/s |
+| Lectura de un prompt de 18K / 200K | 1.782 / 2.284 tok/s | 1.330 / 2.057 tok/s |
 | Perplejidad, 2.304 tokens de texto español reservado (evaluación forzada) | 4,515 | **4,480** |
 | 24 problemas de matemáticas y lógica, 4 de programación | 24/24, 4/4 | 24/24, 4/4 |
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-decode-dark.svg">
+  <img alt="Generación por texto de Huihui con las dos gráficas, UD-Q4_K_XL frente a Q8_0: chat en español 76,5/39,6, razonamiento 95,0/44,4, tras un documento de 18K 77,5/43,7, código 89,8/41,5, edición 131,0/41,4, tras un prompt de 5K 53,7/40,8 tok/s." src="docs/media/readme/q8-decode-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-prefill-dark.svg">
+  <img alt="Lectura del prompt de Huihui con las dos gráficas, UD-Q4_K_XL frente a Q8_0: 18.076 tokens 1.782/1.330 tok/s, 5.296 tokens 1.120/610, 3.340 tokens 808/426." src="docs/media/readme/q8-prefill-light.svg">
+</picture>
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-longctx-dark.svg">
+  <img alt="Generación de Huihui justo después de un prompt largo con las dos gráficas, UD-Q4_K_XL frente a Q8_0: 32K 76,1/40,0, 64K 92,3/46,6, 120K 74,8/33,5, 200K 71,0/40,4 tok/s." src="docs/media/readme/q8-longctx-light.svg">
+</picture>
+
+El Q8_0 genera a la mitad de velocidad que UD-Q4_K_XL sea cual sea el prompt: a diferencia de UD-Q4_K_XL, no gana
+nada con los borradores aceptados (el texto de edición), porque cada token de más trae sus propios expertos de la RAM.
+Los prompts largos los lee casi igual de rápido (2.057-2.256 tok/s; uno de 200K en 97 s frente a 88), porque la ruta
+del prompt calcula todos los expertos en las gráficas. Generación: dos rondas cada uno; prompts largos: una ronda (128
+tokens de respuesta, así que varían más); lectura del prompt: la mediana de cuatro (UD-Q4_K_XL) y de ocho (Q8_0) rondas.
 
 La generación del Q8_0 la limita la RAM: con las dos gráficas llenas, cada token lee ~1 GB de expertos de la DDR4
 (43 GB/s medidos), así que ganaron los ajustes que leen menos de ella: `--pcie-frac 0.25` (+5 %), `--spec-min-p 0.8`
@@ -293,6 +319,11 @@ cambios, sin búsqueda en el prompt, sin precarga, más workers, una caché de f
   pasan al mejor experto que sí tenga una, si está dentro del margen. En el Q8_0 da +34 % con margen 0,25 y +55 % con
   0,5, pero cuesta tanta calidad como bajar a UD-Q4_K_XL (+0,008 nats por token, KL 0,024-0,038 frente a 0,006 entre
   dos ejecuciones normales; incluso con 0,1: +0,005, KL 0,014), así que queda apagado.
+
+<picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/media/readme/q8-quality-dark.svg">
+    <img alt="Divergencia KL frente al Q8_0 por 1000, evaluación forzada sobre 2.304 tokens de texto español: una segunda ejecución del Q8_0 5,6, route-resident con 0,1 13,6, con 0,25 23,5, con 0,5 37,5, UD-Q4_K_XL 28,2." src="docs/media/readme/q8-quality-light.svg">
+  </picture>
 - **Descuantización Q8_0 coalescida** para las proyecciones densas de la ruta del prompt (#1720 de eelgaev en el
   original): los mismos bits (`dequant_q8_0_identity` compara BF16, FP16 y FP32 con el kernel anterior), de 5 a 6 veces
   más rápida en ese kernel en la 3090 (BF16, FP16 y FP32).
